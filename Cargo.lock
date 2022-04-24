@@ -1249,6 +1249,8 @@ dependencies = [
  "atomic",
  "clap",
  "crossterm 0.23.2",
+ "lazy_static",
+ "log",
  "openmpt",
  "rodio",
  "tui",

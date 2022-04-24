@@ -17,6 +17,8 @@ use openmpt::module::{stream::ModuleStream, Logger, Module};
 
 use anyhow::{anyhow, Result};
 
+use crate::playlist::ModPath;
+
 #[derive(Debug)]
 pub struct ModuleCreationError;
 
@@ -42,12 +44,23 @@ pub fn open_module_file(file_path: String) -> Result<Module> {
         }
 
         let inner_file = zip.by_index(0)?;
-        println!("Using {} from zip file {}", inner_file.name(), file_path);
+        log::info!("Using {} from zip file {}", inner_file.name(), file_path);
         open_module(inner_file)
     } else {
-        println!("Using file {} directly", file_path);
+        log::info!("Using file {} directly", file_path);
         open_module(file)
     }?;
 
     Ok(module)
+}
+
+pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
+    let file = File::open(&mod_path.root_path)?;
+
+    if mod_path.archive_paths.is_empty() {
+        log::info!("Opening root path as module: {}", mod_path.root_path);
+        Ok(open_module(file)?)
+    } else {
+        todo!("Open from nested archives")
+    }
 }

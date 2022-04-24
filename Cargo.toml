@@ -15,3 +15,5 @@ clap = { version = "3.1.8", features = ["derive"] }
 tui = "0.17.0"
 crossterm = "0.23.2"
 atomic = "0.5.1"
+log = { version = "0.4.16", features = ["std"] }
+lazy_static = "1.4.0"

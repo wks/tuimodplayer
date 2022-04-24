@@ -13,20 +13,44 @@
 
 use std::sync::Arc;
 
-use crate::{module_file::open_module_file, options::Options};
+use crate::module_file::open_module_from_mod_path;
+use crate::options::Options;
+use crate::playlist::{self, PlayListItem};
 
 use crate::module_source::{ModuleSource, PlayState};
 use crate::ui::run_ui;
 
 use openmpt::module::{metadata::MetadataKey, Module};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 
 pub struct AppState {
-    pub mod_info: ModuleInfo,
+    pub mod_info: Option<ModuleInfo>,
     pub play_state: Arc<PlayState>,
     pub rodio_state: RodioState,
+    pub playlist: Vec<PlayListItem>,
+    pub cur_module: usize,
+}
+
+impl AppState {
+    pub fn start_playing(&mut self) {
+        while self.cur_module < self.playlist.len() {
+            let item = &self.playlist[self.cur_module];
+            if let Err(e) = open_module_from_mod_path(&item.mod_path).and_then(|mut module| {
+                self.mod_info = Some(ModuleInfo::from_module(&mut module));
+                self.rodio_state
+                    .play_module(module, self.play_state.clone())
+            }) {
+                log::info!("Cannot play {}: {}", item.mod_path.root_path, e);
+                self.cur_module += 1;
+                continue;
+            }
+            break;
+        }
+
+        log::info!("No more mod to play");
+    }
 }
 
 pub struct ModuleInfo {
@@ -95,21 +119,20 @@ impl RodioState {
 pub fn run(options: Options) -> Result<()> {
     let file_path = options.file_path;
 
-    let mut module = open_module_file(file_path.clone())
-        .with_context(|| format!("Cannot open file {}", file_path))?;
-
-    module.set_repeat_count(-1);
+    let playlist = playlist::load_from_path(&file_path);
 
     let play_state = Arc::new(PlayState::default());
     let rodio_state = RodioState::new()?;
 
     let mut app_state = AppState {
-        mod_info: ModuleInfo::from_module(&mut module),
-        play_state: play_state.clone(),
+        mod_info: None,
+        play_state,
         rodio_state,
+        playlist,
+        cur_module: 0,
     };
 
-    app_state.rodio_state.play_module(module, play_state)?;
+    app_state.start_playing();
 
     run_ui(&mut app_state)?;
 

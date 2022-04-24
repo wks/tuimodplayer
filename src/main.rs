@@ -12,23 +12,34 @@
 // not, see <https://www.gnu.org/licenses/>.
 
 mod app;
+mod logging;
 mod module_file;
 mod module_source;
 mod options;
+mod playlist;
 mod ui;
 
 use clap::Parser;
 use options::Options;
 
+fn print_error_and_exit(msg: &str, e: &dyn std::error::Error) -> ! {
+    eprintln!("{}: {}", msg, e);
+    let mut src = e.source();
+    while let Some(e) = src {
+        eprintln!("  Cause by: {}", e);
+        src = e.source();
+    }
+
+    std::process::exit(1);
+}
+
 fn main() {
+    if let Err(e) = crate::logging::init() {
+        print_error_and_exit("Failed to initialize logger", &e);
+    }
+
     let options = Options::parse();
-    app::run(options).unwrap_or_else(|e| {
-        eprintln!("TUIModPlayer exited with an error: {}", e);
-        let mut src = e.source();
-        while let Some(e) = src {
-            eprintln!("  Cause by: {}", e);
-            src = e.source();
-        }
-        std::process::exit(1);
-    });
+    if let Err(e) = app::run(options) {
+        print_error_and_exit("TUIModPlayer exited with an error", e.as_ref());
+    }
 }
