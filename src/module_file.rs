@@ -58,7 +58,10 @@ pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
     let file = File::open(&mod_path.root_path)?;
 
     if mod_path.archive_paths.is_empty() {
-        log::info!("Opening root path as module: {}", mod_path.root_path);
+        log::info!(
+            "Opening root path as module: {}",
+            mod_path.root_path.to_string_lossy()
+        );
         Ok(open_module(file)?)
     } else {
         todo!("Open from nested archives")

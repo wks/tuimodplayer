@@ -137,7 +137,7 @@ fn render_playlist(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState
     let text = app_state
         .playlist
         .iter()
-        .map(|item| Spans::from(item.mod_path.root_path.clone()))
+        .map(|item| Spans::from(item.mod_path.root_path.to_string_lossy().to_string()))
         .collect::<Vec<_>>();
 
     let block = Block::default().title("Playlist").borders(Borders::ALL);

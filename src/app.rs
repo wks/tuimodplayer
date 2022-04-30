@@ -42,7 +42,11 @@ impl AppState {
                 self.rodio_state
                     .play_module(module, self.play_state.clone())
             }) {
-                log::info!("Cannot play {}: {}", item.mod_path.root_path, e);
+                log::info!(
+                    "Cannot play {}: {}",
+                    item.mod_path.root_path.to_string_lossy(),
+                    e
+                );
                 self.cur_module += 1;
                 continue;
             }
