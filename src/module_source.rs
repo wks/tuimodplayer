@@ -30,6 +30,7 @@ pub struct PlayState {
 pub struct ModuleSource {
     module: Module,
     play_state: Arc<PlayState>,
+    sample_rate: usize,
     buf: Vec<f32>,
     cursor: usize,
     limit: usize,
@@ -37,11 +38,24 @@ pub struct ModuleSource {
 
 unsafe impl Send for ModuleSource {}
 
+/// The default sample rate.
+///
+/// libopenmpt recommends 48000 because
+/// "practically all audio equipment and file formats use 48000Hz nowadays".
+pub const DEFAULT_SAMPLE_RATE: usize = 48000;
+
+/// Minimum sample rate supported by libopenmpt.
+pub const MIN_SAMPLE_RATE: usize = 8000;
+
+/// Maximum sample rate supported by libopenmpt.
+pub const MAX_SAMPLE_RATE: usize = 192000;
+
 impl ModuleSource {
-    pub fn new(module: Module, play_state: Arc<PlayState>) -> Self {
+    pub fn new(module: Module, play_state: Arc<PlayState>, sample_rate: usize) -> Self {
         Self {
             module,
             play_state,
+            sample_rate,
             buf: vec![0.0f32; 128 * 2],
             cursor: 0,
             limit: 0,
@@ -78,7 +92,7 @@ impl Iterator for ModuleSource {
         while self.cursor >= self.limit {
             let frames_read = self
                 .module
-                .read_interleaved_float_stereo(44100, &mut self.buf);
+                .read_interleaved_float_stereo(self.sample_rate() as i32, &mut self.buf);
             if frames_read == 0 {
                 return None;
             }
@@ -104,7 +118,7 @@ impl rodio::Source for ModuleSource {
     }
 
     fn sample_rate(&self) -> u32 {
-        44100
+        self.sample_rate as u32
     }
 
     fn total_duration(&self) -> Option<std::time::Duration> {

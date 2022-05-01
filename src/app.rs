@@ -94,23 +94,25 @@ impl ModuleInfo {
 }
 
 pub struct RodioState {
+    sample_rate: usize,
     _stream: OutputStream,
     handle: OutputStreamHandle,
     _sink: Sink,
 }
 
 impl RodioState {
-    fn new() -> Result<Self> {
+    fn new(sample_rate: usize) -> Result<Self> {
         let (_stream, handle) = rodio::OutputStream::try_default()?;
         let _sink = rodio::Sink::try_new(&handle)?;
         Ok(Self {
+            sample_rate,
             _stream,
             handle,
             _sink,
         })
     }
     fn play_module(&mut self, module: Module, play_state: Arc<PlayState>) -> Result<()> {
-        let module_source = ModuleSource::new(module, play_state);
+        let module_source = ModuleSource::new(module, play_state, self.sample_rate);
         self.handle.play_raw(module_source)?;
 
         //sink.append(module_source);
@@ -118,15 +120,21 @@ impl RodioState {
 
         Ok(())
     }
+
+    pub fn sample_rate(&self) -> usize {
+        self.sample_rate
+    }
 }
 
 pub fn run(options: Options) -> Result<()> {
-    let file_path = options.file_path;
-
-    let playlist = playlist::load_from_path(&file_path);
-
     let play_state = Arc::new(PlayState::default());
-    let rodio_state = RodioState::new()?;
+    let rodio_state = RodioState::new(options.sample_rate)?;
+
+    let playlist = if let Some(file_path) = options.file_path {
+        playlist::load_from_path(&file_path)
+    } else {
+        vec![]
+    };
 
     let mut app_state = AppState {
         mod_info: None,
