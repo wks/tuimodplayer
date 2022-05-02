@@ -95,11 +95,15 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
     if let Some(mod_info) = &app_state.mod_info.as_ref() {
         let play_state = &app_state.play_state;
 
+        let mut max_key_len = 0;
         let mut rows = vec![];
 
-        let mut add_row = |k, v| {
-            let row = Row::new([Cell::from(Span::raw(k)), Cell::from(Span::raw(v))]);
-
+        let mut add_row = |k: &str, v: String| {
+            max_key_len = Ord::max(max_key_len, k.len());
+            let row = Row::new([
+                Cell::from(Span::raw(k.to_string())),
+                Cell::from(Span::raw(v)),
+            ]);
             rows.push(row);
         };
 
@@ -125,9 +129,11 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
         add_row("Tempo", format!("{}", tempo));
         add_row("Sample rate", format!("{}", sample_rate));
 
-        let table = Table::new(rows)
-            .widths(&[Constraint::Length(10), Constraint::Percentage(100)])
-            .block(block);
+        let table_layout = [
+            Constraint::Length(max_key_len as u16),
+            Constraint::Percentage(100),
+        ];
+        let table = Table::new(rows).widths(&table_layout).block(block);
 
         f.render_widget(table, area);
     } else {
