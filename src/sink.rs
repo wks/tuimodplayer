@@ -15,7 +15,10 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 
-use cpal::{traits::{HostTrait, StreamTrait}, Device, Host, Stream};
+use cpal::{
+    traits::{HostTrait, StreamTrait},
+    Device, Host, Stream,
+};
 use openmpt::module::Module;
 use rodio::{DeviceTrait, OutputStream, OutputStreamHandle, Sink};
 
@@ -41,21 +44,21 @@ unsafe impl Send for CpalWriter {}
 
 impl CpalWriter {
     pub fn new(shared: Arc<CpalStateShared>) -> Self {
-        Self {
-            shared,
-        }
+        Self { shared }
     }
     pub fn write_data(&mut self, data: &mut [f32], _info: &cpal::OutputCallbackInfo) {
         let mut maybe_module = self.shared.module.lock().unwrap();
         if let Some(ref mut module) = maybe_module.as_mut() {
-            let mut buf = Vec::with_capacity(data.len());
-            buf.resize(data.len(), 0.0f32);
-            let actual_read = module.read_interleaved_float_stereo(44100 as i32, &mut buf);
-            log::info!("data.len: {}, buf.capa: {}, buf.len: {}, actual_read: {}",
-                data.len(), buf.capacity(), buf.len(), actual_read);
-            data.copy_from_slice(&buf);
+            let actual_read_frames = module.read_interleaved_float_stereo(44100 as i32, data);
+            let actual_read_bytes = actual_read_frames * 2;
+            log::trace!(
+                "data.len: {}, actual_read_bytes: {}",
+                data.len(),
+                actual_read_bytes
+            );
+            data[actual_read_bytes..].fill(0.0f32);
         } else {
-            data.fill_with(|| { 0.0f32 })
+            data.fill_with(|| 0.0f32)
         }
     }
 }
@@ -77,13 +80,15 @@ impl CpalState {
 
         let mut cpal_writer = CpalWriter::new(shared.clone());
 
-        let stream = device.build_output_stream(
-            &config.into(),
-            move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
-                cpal_writer.write_data(data, info);
-            },
-            |err| { panic!("{}", err) },
-        ).unwrap();
+        let stream = device
+            .build_output_stream(
+                &config.into(),
+                move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
+                    cpal_writer.write_data(data, info);
+                },
+                |err| panic!("{}", err),
+            )
+            .unwrap();
 
         Self {
             host,
