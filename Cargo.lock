@@ -1259,6 +1259,7 @@ dependencies = [
  "anyhow",
  "atomic",
  "clap",
+ "cpal",
  "crossterm 0.23.2",
  "lazy_static",
  "log",

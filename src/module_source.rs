@@ -13,19 +13,11 @@
 
 use std::sync::Arc;
 
-use atomic::{Atomic, Ordering};
+use atomic::Ordering;
 use openmpt::module::Module;
 use rodio::Source;
 
-#[derive(Default)]
-pub struct PlayState {
-    pub order: Atomic<usize>,
-    pub pattern: Atomic<usize>,
-    pub row: Atomic<usize>,
-    pub n_rows: Atomic<usize>,
-    pub speed: Atomic<usize>,
-    pub tempo: Atomic<usize>,
-}
+use crate::player::PlayState;
 
 pub struct ModuleSource {
     module: Module,
