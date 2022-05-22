@@ -18,17 +18,22 @@ use crate::options::Options;
 use crate::player::PlayState;
 use crate::playlist::{self, PlayListItem};
 
-use crate::sink::RodioState;
+use crate::sink::{CpalState, RodioState};
 use crate::ui::run_ui;
 
 use openmpt::module::{metadata::MetadataKey, Module};
 
 use anyhow::Result;
 
+enum Backend {
+    Cpal(CpalState),
+    Rodio(RodioState),
+}
+
 pub struct AppState {
     pub mod_info: Option<ModuleInfo>,
     pub play_state: Arc<PlayState>,
-    pub rodio_state: RodioState,
+    backend: Backend,
     pub playlist: Vec<PlayListItem>,
     pub cur_module: usize,
 }
@@ -39,8 +44,14 @@ impl AppState {
             let item = &self.playlist[self.cur_module];
             if let Err(e) = open_module_from_mod_path(&item.mod_path).and_then(|mut module| {
                 self.mod_info = Some(ModuleInfo::from_module(&mut module));
-                self.rodio_state
-                    .play_module(module, self.play_state.clone())
+                match self.backend {
+                    Backend::Cpal(ref mut cpal_state) => {
+                        cpal_state.play_module(module, self.play_state.clone())
+                    }
+                    Backend::Rodio(ref mut rodio_state) => {
+                        rodio_state.play_module(module, self.play_state.clone())
+                    }
+                }
             }) {
                 log::info!(
                     "Cannot play {}: {}",
@@ -95,7 +106,11 @@ impl ModuleInfo {
 
 pub fn run(options: Options) -> Result<()> {
     let play_state = Arc::new(PlayState::default());
-    let rodio_state = RodioState::new(options.sample_rate)?;
+    let backend = if options.cpal {
+        Backend::Cpal(CpalState::new())
+    } else {
+        Backend::Rodio(RodioState::new(options.sample_rate)?)
+    };
 
     let playlist = if let Some(file_path) = options.file_path {
         playlist::load_from_path(&file_path)
@@ -106,7 +121,7 @@ pub fn run(options: Options) -> Result<()> {
     let mut app_state = AppState {
         mod_info: None,
         play_state,
-        rodio_state,
+        backend,
         playlist,
         cur_module: 0,
     };

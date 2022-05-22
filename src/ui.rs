@@ -119,7 +119,7 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
         let speed = play_state.speed.load(Ordering::SeqCst);
         let tempo = play_state.tempo.load(Ordering::SeqCst);
 
-        let sample_rate = app_state.rodio_state.sample_rate();
+        //let sample_rate = app_state.rodio_state.sample_rate();
 
         add_row("Title", mod_info.title.clone());
         add_row("Order", format!("{}/{}", order, n_orders));
@@ -127,7 +127,7 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
         add_row("Row", format!("{}/{}", row, n_rows));
         add_row("Speed", format!("{}", speed));
         add_row("Tempo", format!("{}", tempo));
-        add_row("Sample rate", format!("{}", sample_rate));
+        //add_row("Sample rate", format!("{}", sample_rate));
 
         let table_layout = [
             Constraint::Length(max_key_len as u16),
