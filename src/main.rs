@@ -18,7 +18,7 @@ mod module_source;
 mod options;
 mod player;
 mod playlist;
-mod sink;
+mod backend;
 mod ui;
 
 use clap::Parser;

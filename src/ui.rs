@@ -48,6 +48,12 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
                     KeyCode::Char('q') => {
                         break;
                     }
+                    KeyCode::Char('m') => {
+                        app_state.next();
+                    }
+                    KeyCode::Char(' ') => {
+                        app_state.pause_resume();
+                    }
                     _ => {}
                 },
                 _ => {}

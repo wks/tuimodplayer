@@ -18,53 +18,32 @@ use crate::options::Options;
 use crate::player::PlayState;
 use crate::playlist::{self, PlayListItem};
 
-use crate::sink::{CpalState, RodioState};
+use crate::backend::{Backend, CpalBackend, ModuleProvider, RodioBackend};
 use crate::ui::run_ui;
 
 use openmpt::module::{metadata::MetadataKey, Module};
 
 use anyhow::Result;
 
-enum Backend {
-    Cpal(CpalState),
-    Rodio(RodioState),
-}
-
 pub struct AppState {
     pub mod_info: Option<ModuleInfo>,
     pub play_state: Arc<PlayState>,
-    backend: Backend,
-    pub playlist: Vec<PlayListItem>,
+    backend: Box<dyn Backend>,
+    pub playlist: Arc<Vec<PlayListItem>>,
     pub cur_module: usize,
 }
 
 impl AppState {
     pub fn start_playing(&mut self) {
-        while self.cur_module < self.playlist.len() {
-            let item = &self.playlist[self.cur_module];
-            if let Err(e) = open_module_from_mod_path(&item.mod_path).and_then(|mut module| {
-                self.mod_info = Some(ModuleInfo::from_module(&mut module));
-                match self.backend {
-                    Backend::Cpal(ref mut cpal_state) => {
-                        cpal_state.play_module(module, self.play_state.clone())
-                    }
-                    Backend::Rodio(ref mut rodio_state) => {
-                        rodio_state.play_module(module, self.play_state.clone())
-                    }
-                }
-            }) {
-                log::info!(
-                    "Cannot play {}: {}",
-                    item.mod_path.root_path.to_string_lossy(),
-                    e
-                );
-                self.cur_module += 1;
-                continue;
-            }
-            break;
-        }
+        self.backend.start();
+    }
 
-        log::info!("No more mod to play");
+    pub fn next(&mut self) {
+        self.backend.next();
+    }
+
+    pub fn pause_resume(&mut self) {
+        self.backend.pause_resume();
     }
 }
 
@@ -104,18 +83,53 @@ impl ModuleInfo {
     }
 }
 
+struct VecModuleProvider {
+    vector: Arc<Vec<PlayListItem>>,
+    cursor: usize,
+}
+
+impl VecModuleProvider {
+    pub fn new(vector: Arc<Vec<PlayListItem>>) -> Self {
+        Self { vector, cursor: 0 }
+    }
+}
+
+impl ModuleProvider for VecModuleProvider {
+    fn next_module(&mut self) -> Option<Module> {
+        if self.cursor < self.vector.len() {
+            let item = &self.vector[self.cursor];
+            self.cursor += 1;
+            match open_module_from_mod_path(&item.mod_path) {
+                Ok(module) => Some(module),
+                Err(e) => {
+                    log::error!("Error loading module {:?}: {}", item.mod_path.root_path.to_string_lossy(), e);
+                    None
+                }
+            }
+        } else {
+            log::info!("No more mods to play!");
+            None
+        }
+    }
+}
+
 pub fn run(options: Options) -> Result<()> {
     let play_state = Arc::new(PlayState::default());
-    let backend = if options.cpal {
-        Backend::Cpal(CpalState::new())
-    } else {
-        Backend::Rodio(RodioState::new(options.sample_rate)?)
-    };
 
     let playlist = if let Some(file_path) = options.file_path {
         playlist::load_from_path(&file_path)
     } else {
         vec![]
+    };
+
+    let playlist = Arc::new(playlist);
+    let module_provider = Box::new(VecModuleProvider::new(playlist.clone()));
+
+    let backend = if options.cpal {
+        Box::new(CpalBackend::new(module_provider))
+    } else {
+        unimplemented!()
+        // RodioBackend::new(module_provider, options.sample_rate)?;
     };
 
     let mut app_state = AppState {
