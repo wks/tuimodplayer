@@ -13,7 +13,11 @@
 
 use std::{io::stdout, time::Duration};
 
-use crate::app::AppState;
+use crate::{
+    app::AppState,
+    backend::BackendEvent,
+    player::{ModuleInfo, MomentStateCopy},
+};
 
 use atomic::Ordering;
 use crossterm::{event, execute, terminal};
@@ -60,6 +64,8 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
             }
         }
 
+        app_state.handle_backend_events();
+
         term.draw(|f| {
             render_ui(f, f.size(), app_state);
         })?;
@@ -98,8 +104,21 @@ fn render_ui(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
 fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
     let block = Block::default().title("State").borders(Borders::ALL);
 
-    if let Some(mod_info) = &app_state.mod_info.as_ref() {
-        let play_state = &app_state.play_state;
+    if let Some(ref play_state) = app_state.play_state {
+        let ModuleInfo {
+            title,
+            n_orders,
+            n_patterns,
+            message,
+        } = play_state.module_info.clone();
+
+        let MomentStateCopy {
+            order,
+            pattern,
+            row,
+            speed,
+            tempo,
+        } = play_state.moment_state.load_atomic();
 
         let mut max_key_len = 0;
         let mut rows = vec![];
@@ -113,24 +132,11 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
             rows.push(row);
         };
 
-        let order = play_state.order.load(Ordering::SeqCst);
-        let n_orders = mod_info.n_orders;
-
-        let pattern = play_state.pattern.load(Ordering::SeqCst);
-        let n_patterns = mod_info.n_patterns;
-
-        let row = play_state.row.load(Ordering::SeqCst);
-        let n_rows = play_state.n_rows.load(Ordering::SeqCst);
-
-        let speed = play_state.speed.load(Ordering::SeqCst);
-        let tempo = play_state.tempo.load(Ordering::SeqCst);
-
-        //let sample_rate = app_state.rodio_state.sample_rate();
-
-        add_row("Title", mod_info.title.clone());
+        add_row("Title", title);
         add_row("Order", format!("{}/{}", order, n_orders));
         add_row("Pattern", format!("{}/{}", pattern, n_patterns));
-        add_row("Row", format!("{}/{}", row, n_rows));
+        //        add_row("Row", format!("{}/{}", row, n_rows));
+        add_row("Row", format!("{}", row));
         add_row("Speed", format!("{}", speed));
         add_row("Tempo", format!("{}", tempo));
         //add_row("Sample rate", format!("{}", sample_rate));

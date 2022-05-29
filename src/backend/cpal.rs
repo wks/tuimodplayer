@@ -11,7 +11,7 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::{self, Arc};
+use std::sync::{self, Arc, mpsc};
 
 use atomic::{Atomic, Ordering};
 use cpal::{
@@ -21,7 +21,9 @@ use cpal::{
 use openmpt::module::Module;
 use rodio::DeviceTrait;
 
-use super::{Backend, ModuleProvider};
+use crate::player::{PlayState, ModuleInfo, MomentState};
+
+use super::{Backend, ModuleProvider, BackendEvent};
 
 pub struct CpalBackend {
     pub host: Host,
@@ -29,6 +31,7 @@ pub struct CpalBackend {
     pub stream: Arc<Stream>,
     shared: Arc<CpalBackendShared>,
     paused: bool,
+    receiver: mpsc::Receiver<BackendEvent>,
 }
 
 struct CpalBackendShared {
@@ -38,7 +41,10 @@ struct CpalBackendShared {
 
 enum CurrentModuleState {
     NotLoaded,
-    Loaded(Module),
+    Loaded {
+        module: Module,
+        moment_state: Arc<MomentState>,
+    },
     Exhausted,
 }
 
@@ -47,6 +53,8 @@ struct CpalBackendPrivate {
     module: CurrentModuleState,
     module_provider: Box<dyn ModuleProvider>,
     stream: sync::Weak<Stream>, // Have to close the loop with Option.
+    sender: mpsc::Sender<BackendEvent>,
+
 }
 
 unsafe impl Send for CpalBackendPrivate {}
@@ -68,7 +76,10 @@ impl CpalBackendPrivate {
                     self.stop_self();
                     break 0;
                 }
-                CurrentModuleState::Loaded(ref mut module) => {
+                CurrentModuleState::Loaded {
+                    ref mut module,
+                    ref moment_state,
+                } => {
                     let time1 = std::time::Instant::now();
                     let actual_read_frames =
                         module.read_interleaved_float_stereo(self.shared.sample_rate as i32, data);
@@ -84,6 +95,7 @@ impl CpalBackendPrivate {
                         buf_time,
                     );
                     if actual_read_frames > 0 {
+                        moment_state.update_from_module(module);
                         break actual_read_bytes;
                     } else {
                         self.module = CurrentModuleState::NotLoaded;
@@ -97,9 +109,19 @@ impl CpalBackendPrivate {
     }
 
     fn load_next(&mut self) {
-        self.module = if let Some(module) = self.module_provider.next_module() {
-            CurrentModuleState::Loaded(module)
+        self.module = if let Some(mut module) = self.module_provider.next_module() {
+            let moment_state: Arc<MomentState> = Default::default();
+            let play_state = PlayState {
+                module_info: ModuleInfo::from_module(&mut module),
+                moment_state: moment_state.clone(),
+            };
+            self.sender.send(BackendEvent::StartedPlaying { play_state }).unwrap();
+            CurrentModuleState::Loaded {
+                module,
+                moment_state
+            }
         } else {
+            self.sender.send(BackendEvent::PlayListExhausted).unwrap();
             CurrentModuleState::Exhausted
         };
     }
@@ -147,12 +169,15 @@ impl CpalBackend {
             sample_rate,
         });
 
+        let (sender, receiver) = mpsc::channel();
+
         let stream = Arc::new_cyclic(|stream_weak| {
             let mut cpal_writer = CpalBackendPrivate {
                 shared: shared.clone(),
                 module: CurrentModuleState::NotLoaded,
                 module_provider,
                 stream: stream_weak.clone(),
+                sender,
             };
 
             device
@@ -172,6 +197,7 @@ impl CpalBackend {
             stream,
             shared,
             paused: false,
+            receiver,
         }
     }
 }
@@ -193,5 +219,12 @@ impl Backend for CpalBackend {
 
     fn next(&mut self) {
         self.shared.next_requested.store(true, Ordering::SeqCst);
+    }
+
+    fn poll_event(&mut self) -> Option<BackendEvent> {
+        match self.receiver.try_recv() {
+            Ok(ev) => Some(ev),
+            Err(_) => None,
+        }
     }
 }

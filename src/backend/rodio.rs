@@ -71,6 +71,10 @@ impl Backend for RodioBackend {
     fn next(&mut self) {
         todo!()
     }
+
+    fn poll_event(&mut self) -> Option<super::BackendEvent> {
+        todo!()
+    }
 }
 
 pub struct ModuleSource {
@@ -110,12 +114,12 @@ impl ModuleSource {
         let speed = module.get_current_speed();
         let tempo = module.get_current_tempo();
 
-        play_state.order.store(order as usize, Ordering::SeqCst);
-        play_state.pattern.store(pattern as usize, Ordering::SeqCst);
-        play_state.row.store(row as usize, Ordering::SeqCst);
-        play_state.n_rows.store(n_rows as usize, Ordering::SeqCst);
-        play_state.speed.store(speed as usize, Ordering::SeqCst);
-        play_state.tempo.store(tempo as usize, Ordering::SeqCst);
+//         play_state.order.store(order as usize, Ordering::SeqCst);
+//         play_state.pattern.store(pattern as usize, Ordering::SeqCst);
+//         play_state.row.store(row as usize, Ordering::SeqCst);
+//         play_state.n_rows.store(n_rows as usize, Ordering::SeqCst);
+//         play_state.speed.store(speed as usize, Ordering::SeqCst);
+//         play_state.tempo.store(tempo as usize, Ordering::SeqCst);
     }
 }
 

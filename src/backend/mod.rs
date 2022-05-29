@@ -16,6 +16,8 @@ mod rodio;
 
 use openmpt::module::Module;
 
+use crate::player::PlayState;
+
 pub use self::cpal::CpalBackend;
 pub use self::rodio::RodioBackend;
 
@@ -23,8 +25,16 @@ pub trait ModuleProvider {
     fn next_module(&mut self) -> Option<Module>;
 }
 
+pub enum BackendEvent {
+    StartedPlaying {
+        play_state: PlayState,
+    },
+    PlayListExhausted,
+}
+
 pub trait Backend {
     fn start(&mut self);
     fn pause_resume(&mut self);
     fn next(&mut self);
+    fn poll_event(&mut self) -> Option<BackendEvent>;
 }

@@ -1212,6 +1212,7 @@ dependencies = [
  "crossterm",
  "lazy_static",
  "log",
+ "num-traits",
  "openmpt",
  "rodio",
  "tui",

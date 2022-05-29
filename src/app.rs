@@ -15,20 +15,20 @@ use std::sync::Arc;
 
 use crate::module_file::open_module_from_mod_path;
 use crate::options::Options;
-use crate::player::PlayState;
+use crate::player::{ModuleInfo, PlayState};
 use crate::playlist::{self, PlayListItem};
 
-use crate::backend::{Backend, CpalBackend, ModuleProvider, RodioBackend};
+use crate::backend::{Backend, CpalBackend, ModuleProvider, RodioBackend, BackendEvent};
 use crate::ui::run_ui;
 
-use openmpt::module::{metadata::MetadataKey, Module};
+use openmpt::module::Module;
 
 use anyhow::Result;
 
 pub struct AppState {
     pub mod_info: Option<ModuleInfo>,
-    pub play_state: Arc<PlayState>,
-    backend: Box<dyn Backend>,
+    pub play_state: Option<PlayState>,
+    pub backend: Box<dyn Backend>,
     pub playlist: Arc<Vec<PlayListItem>>,
     pub cur_module: usize,
 }
@@ -45,40 +45,17 @@ impl AppState {
     pub fn pause_resume(&mut self) {
         self.backend.pause_resume();
     }
-}
 
-pub struct ModuleInfo {
-    pub title: String,
-    pub n_orders: usize,
-    pub n_patterns: usize,
-    pub message: Vec<String>,
-}
-
-impl ModuleInfo {
-    fn from_module(module: &mut Module) -> Self {
-        let title = module
-            .get_metadata(MetadataKey::ModuleTitle)
-            .unwrap_or_else(|| "(no title)".to_string());
-        let n_orders = module.get_num_orders() as usize;
-        let n_patterns = module.get_num_patterns() as usize;
-        let message = {
-            let n_instruments = module.get_num_instruments();
-            if n_instruments != 0 {
-                (0..n_instruments)
-                    .map(|i| module.get_instrument_name(i))
-                    .collect::<Vec<_>>()
-            } else {
-                let n_samples = module.get_num_samples();
-                (0..n_samples)
-                    .map(|i| module.get_sample_name(i))
-                    .collect::<Vec<_>>()
+    pub fn handle_backend_events(&mut self) {
+        while let Some(be_ev) = self.backend.poll_event() {
+            match be_ev {
+                BackendEvent::StartedPlaying { play_state } => {
+                    self.play_state = Some(play_state);
+                }
+                BackendEvent::PlayListExhausted => {
+                    self.play_state = None;
+                }
             }
-        };
-        Self {
-            title,
-            n_orders,
-            n_patterns,
-            message,
         }
     }
 }
@@ -118,8 +95,6 @@ impl ModuleProvider for VecModuleProvider {
 }
 
 pub fn run(options: Options) -> Result<()> {
-    let play_state = Arc::new(PlayState::default());
-
     let playlist = if let Some(file_path) = options.file_path {
         playlist::load_from_path(&file_path)
     } else {
@@ -137,7 +112,7 @@ pub fn run(options: Options) -> Result<()> {
 
     let mut app_state = AppState {
         mod_info: None,
-        play_state,
+        play_state: None,
         backend,
         playlist,
         cur_module: 0,
