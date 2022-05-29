@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use crate::module_file::open_module_from_mod_path;
 use crate::options::Options;
-use crate::player::{ModuleInfo, PlayState};
+use crate::player::PlayState;
 use crate::playlist::{self, PlayListItem};
 
 use crate::backend::{Backend, BackendEvent, CpalBackend, ModuleProvider};
@@ -26,7 +26,6 @@ use openmpt::module::Module;
 use anyhow::Result;
 
 pub struct AppState {
-    pub mod_info: Option<ModuleInfo>,
     pub play_state: Option<PlayState>,
     pub backend: Box<dyn Backend>,
     pub playlist: Arc<Vec<PlayListItem>>,
@@ -108,7 +107,6 @@ pub fn run(options: Options) -> Result<()> {
         Box::new(CpalBackend::new(options.sample_rate, module_provider));
 
     let mut app_state = AppState {
-        mod_info: None,
         play_state: None,
         backend,
         playlist,

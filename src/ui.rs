@@ -165,8 +165,9 @@ fn render_playlist(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState
 }
 
 fn render_message(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
-    let text = if let Some(mod_info) = app_state.mod_info.as_ref() {
-        mod_info
+    let text = if let Some(ref play_state) = app_state.play_state {
+        play_state
+            .module_info
             .message
             .iter()
             .map(|line| Spans::from(line.clone()))
