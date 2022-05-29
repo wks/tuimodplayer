@@ -11,36 +11,20 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-mod app;
-mod backend;
-mod logging;
-mod module_file;
-mod options;
-mod player;
-mod playlist;
-mod ui;
+mod cpal;
+mod rodio;
 
-use clap::Parser;
-use options::Options;
+use openmpt::module::Module;
 
-fn print_error_and_exit(msg: &str, e: &dyn std::error::Error) -> ! {
-    eprintln!("{}: {}", msg, e);
-    let mut src = e.source();
-    while let Some(e) = src {
-        eprintln!("  Cause by: {}", e);
-        src = e.source();
-    }
+pub use self::cpal::CpalBackend;
+pub use self::rodio::RodioBackend;
 
-    std::process::exit(1);
+pub trait ModuleProvider {
+    fn next_module(&mut self) -> Option<Module>;
 }
 
-fn main() {
-    if let Err(e) = crate::logging::init() {
-        print_error_and_exit("Failed to initialize logger", &e);
-    }
-
-    let options = Options::parse();
-    if let Err(e) = app::run(options) {
-        print_error_and_exit("TUIModPlayer exited with an error", e.as_ref());
-    }
+pub trait Backend {
+    fn start(&mut self);
+    fn pause_resume(&mut self);
+    fn next(&mut self);
 }

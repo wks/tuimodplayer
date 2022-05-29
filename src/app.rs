@@ -102,7 +102,11 @@ impl ModuleProvider for VecModuleProvider {
             match open_module_from_mod_path(&item.mod_path) {
                 Ok(module) => Some(module),
                 Err(e) => {
-                    log::error!("Error loading module {:?}: {}", item.mod_path.root_path.to_string_lossy(), e);
+                    log::error!(
+                        "Error loading module {:?}: {}",
+                        item.mod_path.root_path.to_string_lossy(),
+                        e
+                    );
                     None
                 }
             }
@@ -125,11 +129,10 @@ pub fn run(options: Options) -> Result<()> {
     let playlist = Arc::new(playlist);
     let module_provider = Box::new(VecModuleProvider::new(playlist.clone()));
 
-    let backend = if options.cpal {
+    let backend: Box<dyn Backend> = if options.cpal {
         Box::new(CpalBackend::new(options.sample_rate, module_provider))
     } else {
-        unimplemented!()
-        // RodioBackend::new(module_provider, options.sample_rate)?;
+        Box::new(RodioBackend::new(options.sample_rate, module_provider)?)
     };
 
     let mut app_state = AppState {

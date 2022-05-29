@@ -15,7 +15,17 @@ use std::num::IntErrorKind;
 
 use clap::Parser;
 
-use crate::module_source::{MAX_SAMPLE_RATE, MIN_SAMPLE_RATE};
+/// The default sample rate.
+///
+/// libopenmpt recommends 48000 because
+/// "practically all audio equipment and file formats use 48000Hz nowadays".
+pub const DEFAULT_SAMPLE_RATE: usize = 48000;
+
+/// Minimum sample rate supported by libopenmpt.
+pub const MIN_SAMPLE_RATE: usize = 8000;
+
+/// Maximum sample rate supported by libopenmpt.
+pub const MAX_SAMPLE_RATE: usize = 192000;
 
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
@@ -23,7 +33,7 @@ pub struct Options {
     pub file_path: Option<String>,
     #[clap(
         long,
-        default_value_t = crate::module_source::DEFAULT_SAMPLE_RATE,
+        default_value_t = DEFAULT_SAMPLE_RATE,
         validator = parse_sample_rate
     )]
     pub sample_rate: usize,

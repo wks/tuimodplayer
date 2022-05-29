@@ -13,11 +13,65 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
+
 use atomic::Ordering;
+
 use openmpt::module::Module;
+use rodio::{OutputStream, OutputStreamHandle, Sink};
+
+use super::{Backend, ModuleProvider};
+
 use rodio::Source;
 
 use crate::player::PlayState;
+
+pub struct RodioBackend {
+    sample_rate: usize,
+    _stream: OutputStream,
+    handle: OutputStreamHandle,
+    _sink: Sink,
+}
+
+impl RodioBackend {
+    pub fn new(sample_rate: usize, _module_provider: Box<dyn ModuleProvider>) -> Result<Self> {
+        let (_stream, handle) = rodio::OutputStream::try_default()?;
+        let _sink = rodio::Sink::try_new(&handle)?;
+        Ok(Self {
+            sample_rate,
+            _stream,
+            handle,
+            _sink,
+        })
+    }
+    pub fn play_module(&mut self, module: Module, play_state: Arc<PlayState>) -> Result<()> {
+        let module_source = ModuleSource::new(module, play_state, self.sample_rate);
+        self.handle.play_raw(module_source)?;
+
+        //sink.append(module_source);
+        // sink.sleep_until_end();
+
+        Ok(())
+    }
+
+    pub fn sample_rate(&self) -> usize {
+        self.sample_rate
+    }
+}
+
+impl Backend for RodioBackend {
+    fn start(&mut self) {
+        todo!()
+    }
+
+    fn pause_resume(&mut self) {
+        todo!()
+    }
+
+    fn next(&mut self) {
+        todo!()
+    }
+}
 
 pub struct ModuleSource {
     module: Module,
@@ -29,18 +83,6 @@ pub struct ModuleSource {
 }
 
 unsafe impl Send for ModuleSource {}
-
-/// The default sample rate.
-///
-/// libopenmpt recommends 48000 because
-/// "practically all audio equipment and file formats use 48000Hz nowadays".
-pub const DEFAULT_SAMPLE_RATE: usize = 48000;
-
-/// Minimum sample rate supported by libopenmpt.
-pub const MIN_SAMPLE_RATE: usize = 8000;
-
-/// Maximum sample rate supported by libopenmpt.
-pub const MAX_SAMPLE_RATE: usize = 192000;
 
 impl ModuleSource {
     pub fn new(module: Module, play_state: Arc<PlayState>, sample_rate: usize) -> Self {
