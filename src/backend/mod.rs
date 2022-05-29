@@ -12,23 +12,19 @@
 // not, see <https://www.gnu.org/licenses/>.
 
 mod cpal;
-mod rodio;
 
 use openmpt::module::Module;
 
 use crate::player::PlayState;
 
 pub use self::cpal::CpalBackend;
-pub use self::rodio::RodioBackend;
 
 pub trait ModuleProvider {
     fn next_module(&mut self) -> Option<Module>;
 }
 
 pub enum BackendEvent {
-    StartedPlaying {
-        play_state: PlayState,
-    },
+    StartedPlaying { play_state: PlayState },
     PlayListExhausted,
 }
 

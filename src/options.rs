@@ -37,8 +37,6 @@ pub struct Options {
         validator = parse_sample_rate
     )]
     pub sample_rate: usize,
-    #[clap(long)]
-    pub cpal: bool,
 }
 
 enum RangeParseError {

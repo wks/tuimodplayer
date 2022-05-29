@@ -15,11 +15,9 @@ use std::{io::stdout, time::Duration};
 
 use crate::{
     app::AppState,
-    backend::BackendEvent,
     player::{ModuleInfo, MomentStateCopy},
 };
 
-use atomic::Ordering;
 use crossterm::{event, execute, terminal};
 
 use tui::{
@@ -109,7 +107,7 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
             title,
             n_orders,
             n_patterns,
-            message,
+            message: _,
         } = play_state.module_info.clone();
 
         let MomentStateCopy {

@@ -18,7 +18,7 @@ use crate::options::Options;
 use crate::player::{ModuleInfo, PlayState};
 use crate::playlist::{self, PlayListItem};
 
-use crate::backend::{Backend, CpalBackend, ModuleProvider, RodioBackend, BackendEvent};
+use crate::backend::{Backend, BackendEvent, CpalBackend, ModuleProvider};
 use crate::ui::run_ui;
 
 use openmpt::module::Module;
@@ -104,11 +104,8 @@ pub fn run(options: Options) -> Result<()> {
     let playlist = Arc::new(playlist);
     let module_provider = Box::new(VecModuleProvider::new(playlist.clone()));
 
-    let backend: Box<dyn Backend> = if options.cpal {
-        Box::new(CpalBackend::new(options.sample_rate, module_provider))
-    } else {
-        Box::new(RodioBackend::new(options.sample_rate, module_provider)?)
-    };
+    let backend: Box<dyn Backend> =
+        Box::new(CpalBackend::new(options.sample_rate, module_provider));
 
     let mut app_state = AppState {
         mod_info: None,

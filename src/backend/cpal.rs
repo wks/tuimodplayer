@@ -11,19 +11,18 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::{self, Arc, mpsc};
+use std::sync::{self, mpsc, Arc};
 
 use atomic::{Atomic, Ordering};
 use cpal::{
-    traits::{HostTrait, StreamTrait},
+    traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Host, Stream,
 };
 use openmpt::module::Module;
-use rodio::DeviceTrait;
 
-use crate::player::{PlayState, ModuleInfo, MomentState};
+use crate::player::{ModuleInfo, MomentState, PlayState};
 
-use super::{Backend, ModuleProvider, BackendEvent};
+use super::{Backend, BackendEvent, ModuleProvider};
 
 pub struct CpalBackend {
     pub host: Host,
@@ -54,7 +53,6 @@ struct CpalBackendPrivate {
     module_provider: Box<dyn ModuleProvider>,
     stream: sync::Weak<Stream>, // Have to close the loop with Option.
     sender: mpsc::Sender<BackendEvent>,
-
 }
 
 unsafe impl Send for CpalBackendPrivate {}
@@ -115,10 +113,12 @@ impl CpalBackendPrivate {
                 module_info: ModuleInfo::from_module(&mut module),
                 moment_state: moment_state.clone(),
             };
-            self.sender.send(BackendEvent::StartedPlaying { play_state }).unwrap();
+            self.sender
+                .send(BackendEvent::StartedPlaying { play_state })
+                .unwrap();
             CurrentModuleState::Loaded {
                 module,
-                moment_state
+                moment_state,
             }
         } else {
             self.sender.send(BackendEvent::PlayListExhausted).unwrap();
