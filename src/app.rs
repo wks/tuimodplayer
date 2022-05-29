@@ -126,7 +126,7 @@ pub fn run(options: Options) -> Result<()> {
     let module_provider = Box::new(VecModuleProvider::new(playlist.clone()));
 
     let backend = if options.cpal {
-        Box::new(CpalBackend::new(module_provider))
+        Box::new(CpalBackend::new(options.sample_rate, module_provider))
     } else {
         unimplemented!()
         // RodioBackend::new(module_provider, options.sample_rate)?;

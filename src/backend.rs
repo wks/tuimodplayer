@@ -45,7 +45,7 @@ pub struct CpalBackend {
 
 struct CpalBackendShared {
     pub next_requested: Atomic<bool>,
-    pub pause_requested: bool,
+    pub sample_rate: usize,
 }
 
 enum CurrentModuleState {
@@ -82,10 +82,10 @@ impl CpalBackendPrivate {
                 },
                 CurrentModuleState::Loaded(ref mut module) => {
                     let time1 = std::time::Instant::now();
-                    let actual_read_frames = module.read_interleaved_float_stereo(44100 as i32, data);
+                    let actual_read_frames = module.read_interleaved_float_stereo(self.shared.sample_rate as i32, data);
                     let time2 = std::time::Instant::now();
                     let elapsed = (time2 - time1).as_micros();
-                    let buf_time = actual_read_frames * 1000 * 1000 / 44100;
+                    let buf_time = actual_read_frames * 1000 * 1000 / self.shared.sample_rate;
                     let actual_read_bytes = actual_read_frames * 2;
                     log::debug!(
                         "data.len: {}, actual_read_bytes: {}, time: {} / {}",
@@ -125,18 +125,31 @@ impl CpalBackendPrivate {
 }
 
 impl CpalBackend {
-    pub fn new(module_provider: Box<dyn ModuleProvider>) -> CpalBackend {
+    pub fn new(sample_rate: usize, module_provider: Box<dyn ModuleProvider>) -> CpalBackend {
         let host = cpal::default_host();
 
         let device = host.default_output_device().expect("No default device");
         log::info!("Output device: {:?}", device.name());
 
-        let config = device.default_output_config().unwrap();
-        log::info!("Default output config: {:?}", config);
+        const CHANNELS: cpal::ChannelCount = 2;
+        const SAMPLE_FORMAT: cpal::SampleFormat = cpal::SampleFormat::F32;
+
+        let config = device.supported_output_configs().unwrap().filter(|config| {
+            let cpal::SampleRate(min_rate) = config.min_sample_rate();
+            let cpal::SampleRate(max_rate) = config.max_sample_rate();
+            let min_rate = min_rate as usize;
+            let max_rate = max_rate as usize;
+
+            config.channels() == CHANNELS && config.sample_format() == SAMPLE_FORMAT &&
+            min_rate <= sample_rate && sample_rate <= max_rate
+        }).next().expect("No suitable config");
+
+        let config = config.with_sample_rate(cpal::SampleRate(sample_rate as u32));
+        log::info!("Using output config: {:?}", config);
 
         let shared = Arc::new(CpalBackendShared {
             next_requested: Atomic::new(false),
-            pause_requested: false,
+            sample_rate,
         });
 
         let stream = Arc::new_cyclic(|stream_weak| {
