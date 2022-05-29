@@ -11,7 +11,7 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, self};
 
 use anyhow::Result;
 
@@ -38,7 +38,7 @@ pub trait ModuleProvider {
 pub struct CpalBackend {
     pub host: Host,
     pub device: Device,
-    pub stream: Stream,
+    pub stream: Arc<Stream>,
     shared: Arc<CpalBackendShared>,
     paused: bool,
 }
@@ -48,50 +48,79 @@ struct CpalBackendShared {
     pub pause_requested: bool,
 }
 
+enum CurrentModuleState {
+    NotLoaded,
+    Loaded(Module),
+    Exhausted,
+}
+
 struct CpalBackendPrivate {
     shared: Arc<CpalBackendShared>,
-    module: Option<Module>,
+    module: CurrentModuleState,
     module_provider: Box<dyn ModuleProvider>,
+    stream: sync::Weak<Stream>,  // Have to close the loop with Option.
 }
 
 unsafe impl Send for CpalBackendPrivate {}
 
 impl CpalBackendPrivate {
     pub fn on_data_requested(&mut self, data: &mut [f32], _info: &cpal::OutputCallbackInfo) {
-        let next_requested = self
-            .shared
-            .next_requested
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |_| Some(false))
-            .unwrap();
-        if next_requested || self.module.is_none() {
-            let maybe_next_module = self.module_provider.next_module();
-            if maybe_next_module.is_none() {
-                self.stop_self();
+        let actual_read_bytes = loop {
+            if self.shared.next_requested.swap(false, Ordering::SeqCst) {
+                self.load_next();
+                continue;
             }
-            self.module = maybe_next_module;
-        }
-        if let Some(ref mut module) = self.module {
-            let time1 = std::time::Instant::now();
-            let actual_read_frames = module.read_interleaved_float_stereo(44100 as i32, data);
-            let time2 = std::time::Instant::now();
-            let elapsed = (time2 - time1).as_micros();
-            let buf_time = actual_read_frames * 1000 * 1000 / 44100;
-            let actual_read_bytes = actual_read_frames * 2;
-            log::debug!(
-                "data.len: {}, actual_read_bytes: {}, time: {} / {}",
-                data.len(),
-                actual_read_bytes,
-                elapsed,
-                buf_time,
-            );
-            data[actual_read_bytes..].fill(0.0f32);
+
+            match self.module {
+                CurrentModuleState::NotLoaded => {
+                    self.load_next();
+                    continue;
+                },
+                CurrentModuleState::Exhausted => {
+                    self.stop_self();
+                    break 0;
+                },
+                CurrentModuleState::Loaded(ref mut module) => {
+                    let time1 = std::time::Instant::now();
+                    let actual_read_frames = module.read_interleaved_float_stereo(44100 as i32, data);
+                    let time2 = std::time::Instant::now();
+                    let elapsed = (time2 - time1).as_micros();
+                    let buf_time = actual_read_frames * 1000 * 1000 / 44100;
+                    let actual_read_bytes = actual_read_frames * 2;
+                    log::debug!(
+                        "data.len: {}, actual_read_bytes: {}, time: {} / {}",
+                        data.len(),
+                        actual_read_bytes,
+                        elapsed,
+                        buf_time,
+                    );
+                    if actual_read_frames > 0 {
+                        break actual_read_bytes;
+                    } else {
+                        self.module = CurrentModuleState::NotLoaded;
+                        continue;
+                    }
+                },
+            };
+        };
+
+        data[actual_read_bytes..].fill(0.0f32);
+    }
+
+    fn load_next(&mut self) {
+        self.module = if let Some(module) = self.module_provider.next_module() {
+            CurrentModuleState::Loaded(module)
         } else {
-            data.fill(0.0f32)
-        }
+            CurrentModuleState::Exhausted
+        };
     }
 
     fn stop_self(&mut self) {
-
+        if let Some(stream) = self.stream.upgrade() {
+            stream.pause().unwrap();
+        } else {
+            panic!("The Stream no longer exists.  Did the main thread quit?");
+        }
     }
 }
 
@@ -102,29 +131,34 @@ impl CpalBackend {
         let device = host.default_output_device().expect("No default device");
         log::info!("Output device: {:?}", device.name());
 
+        let config = device.default_output_config().unwrap();
+        log::info!("Default output config: {:?}", config);
+
         let shared = Arc::new(CpalBackendShared {
             next_requested: Atomic::new(false),
             pause_requested: false,
         });
 
-        let config = device.default_output_config().unwrap();
-        log::info!("Default output config: {:?}", config);
+        let stream = Arc::new_cyclic(|stream_weak| {
+            let mut cpal_writer = CpalBackendPrivate {
+                shared: shared.clone(),
+                module: CurrentModuleState::NotLoaded,
+                module_provider,
+                stream: stream_weak.clone(),
+            };
 
-        let mut cpal_writer = CpalBackendPrivate {
-            shared: shared.clone(),
-            module: None,
-            module_provider,
-        };
+            let stream = device
+                .build_output_stream(
+                    &config.into(),
+                    move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
+                        cpal_writer.on_data_requested(data, info);
+                    },
+                    |err| panic!("{}", err),
+                )
+                .unwrap();
 
-        let stream = device
-            .build_output_stream(
-                &config.into(),
-                move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
-                    cpal_writer.on_data_requested(data, info);
-                },
-                |err| panic!("{}", err),
-            )
-            .unwrap();
+            stream
+        });
 
         Self {
             host,
