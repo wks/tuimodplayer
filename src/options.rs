@@ -30,7 +30,10 @@ pub const MAX_SAMPLE_RATE: usize = 192000;
 #[derive(Parser)]
 #[clap(version, about, long_about = None)]
 pub struct Options {
-    pub file_path: Option<String>,
+    /// Paths to individual mods, archives or directories.
+    /// For archives and directories, it will search for all mod files inside.
+    #[clap(name = "PATH")]
+    pub paths: Vec<String>,
     #[clap(
         long,
         default_value_t = DEFAULT_SAMPLE_RATE,

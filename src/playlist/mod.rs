@@ -12,9 +12,12 @@
 // not, see <https://www.gnu.org/licenses/>.
 
 use lazy_static::lazy_static;
-use std::{ffi::OsString, path::Path};
+use openmpt::module::Module;
+use std::{ffi::OsString, path::Path, sync::Arc};
 
 use walkdir::WalkDir;
+
+use crate::{backend::ModuleProvider, module_file::open_module_from_mod_path};
 
 pub struct ModPath {
     pub root_path: OsString,
@@ -46,10 +49,28 @@ lazy_static! {
     };
 }
 
-pub fn load_from_path(root_path: &str) -> Vec<PlayListItem> {
-    let path = Path::new(&root_path);
+pub struct PlayList {
+    pub items: Vec<PlayListItem>,
+    pub now_playing: Option<usize>,
+    pub next_index: Option<usize>,
+}
 
-    let mut items = vec![];
+impl PlayList {
+    pub fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            now_playing: None,
+            next_index: None,
+        }
+    }
+
+    pub fn load_from_path(&mut self, root_path: &str) {
+        load_from_path(root_path, &mut self.items);
+    }
+}
+
+pub fn load_from_path(root_path: &str, items: &mut Vec<PlayListItem>) {
+    let path = Path::new(&root_path);
 
     let mut add_item = |mod_path: ModPath| {
         items.push(PlayListItem {
@@ -65,8 +86,6 @@ pub fn load_from_path(root_path: &str) -> Vec<PlayListItem> {
     } else {
         log::info!("{} is neither a file or a directory", root_path);
     }
-
-    items
 }
 
 fn load_from_file<F: FnMut(ModPath)>(root_path: &str, path: &Path, f: &mut F) {
@@ -103,4 +122,38 @@ fn load_from_dir<F: FnMut(ModPath)>(path: &Path, f: &mut F) {
                 }
             }
         })
+}
+
+pub struct PlayListModuleProvider {
+    playlist: Arc<PlayList>,
+    cursor: usize,
+}
+
+impl PlayListModuleProvider {
+    pub fn new(playlist: Arc<PlayList>) -> Self {
+        Self { playlist, cursor: 0 }
+    }
+}
+
+impl ModuleProvider for PlayListModuleProvider {
+    fn next_module(&mut self) -> Option<Module> {
+        if self.cursor < self.playlist.items.len() {
+            let item = &self.playlist.items[self.cursor];
+            self.cursor += 1;
+            match open_module_from_mod_path(&item.mod_path) {
+                Ok(module) => Some(module),
+                Err(e) => {
+                    log::error!(
+                        "Error loading module {:?}: {}",
+                        item.mod_path.root_path.to_string_lossy(),
+                        e
+                    );
+                    None
+                }
+            }
+        } else {
+            log::info!("No more mods to play!");
+            None
+        }
+    }
 }

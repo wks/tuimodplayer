@@ -13,22 +13,19 @@
 
 use std::sync::Arc;
 
-use crate::module_file::open_module_from_mod_path;
 use crate::options::Options;
 use crate::player::PlayState;
-use crate::playlist::{self, PlayListItem};
+use crate::playlist::{PlayList, PlayListModuleProvider};
 
-use crate::backend::{Backend, BackendEvent, CpalBackend, ModuleProvider};
+use crate::backend::{Backend, BackendEvent, CpalBackend};
 use crate::ui::run_ui;
-
-use openmpt::module::Module;
 
 use anyhow::Result;
 
 pub struct AppState {
     pub play_state: Option<PlayState>,
     pub backend: Box<dyn Backend>,
-    pub playlist: Arc<Vec<PlayListItem>>,
+    pub playlist: Arc<PlayList>,
     pub cur_module: usize,
 }
 
@@ -59,49 +56,15 @@ impl AppState {
     }
 }
 
-struct VecModuleProvider {
-    vector: Arc<Vec<PlayListItem>>,
-    cursor: usize,
-}
-
-impl VecModuleProvider {
-    pub fn new(vector: Arc<Vec<PlayListItem>>) -> Self {
-        Self { vector, cursor: 0 }
-    }
-}
-
-impl ModuleProvider for VecModuleProvider {
-    fn next_module(&mut self) -> Option<Module> {
-        if self.cursor < self.vector.len() {
-            let item = &self.vector[self.cursor];
-            self.cursor += 1;
-            match open_module_from_mod_path(&item.mod_path) {
-                Ok(module) => Some(module),
-                Err(e) => {
-                    log::error!(
-                        "Error loading module {:?}: {}",
-                        item.mod_path.root_path.to_string_lossy(),
-                        e
-                    );
-                    None
-                }
-            }
-        } else {
-            log::info!("No more mods to play!");
-            None
-        }
-    }
-}
-
 pub fn run(options: Options) -> Result<()> {
-    let playlist = if let Some(file_path) = options.file_path {
-        playlist::load_from_path(&file_path)
-    } else {
-        vec![]
-    };
+    let mut playlist = PlayList::new();
+
+    for path in options.paths.iter() {
+        playlist.load_from_path(path);
+    }
 
     let playlist = Arc::new(playlist);
-    let module_provider = Box::new(VecModuleProvider::new(playlist.clone()));
+    let module_provider = Box::new(PlayListModuleProvider::new(playlist.clone()));
 
     let backend: Box<dyn Backend> =
         Box::new(CpalBackend::new(options.sample_rate, module_provider));
