@@ -23,9 +23,10 @@ use crossterm::{event, execute, terminal};
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
     terminal::Frame,
     text::{Span, Spans},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table},
 };
 
 use anyhow::Result;
@@ -153,16 +154,42 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
 }
 
 fn render_playlist(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
-    let text = app_state
-        .playlist
-        .items
+    let (titles, now_playing) = {
+        let playlist = app_state.playlist.lock().unwrap();
+        let titles = playlist
+            .items
+            .iter()
+            .map(|item| item.mod_path.root_path.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+        let now_playing = playlist.now_playing;
+        (titles, now_playing)
+    };
+
+    let items: Vec<ListItem> = titles
         .iter()
-        .map(|item| Spans::from(item.mod_path.root_path.to_string_lossy().to_string()))
-        .collect::<Vec<_>>();
+        .cloned()
+        .map(|line| {
+            let span = Spans::from(line);
+            ListItem::new(span).style(Style::default().fg(Color::White).bg(Color::Black))
+        })
+        .collect();
 
     let block = Block::default().title("Playlist").borders(Borders::ALL);
-    let paragraph = Paragraph::new(text).block(block);
-    f.render_widget(paragraph, area);
+
+    let items = List::new(items)
+        .block(block)
+        .highlight_style(
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol(">> ");
+
+    let mut state = ListState::default();
+    state.select(now_playing);
+
+    f.render_stateful_widget(items, area, &mut state);
 }
 
 fn render_message(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {

@@ -13,7 +13,11 @@
 
 use lazy_static::lazy_static;
 use openmpt::module::Module;
-use std::{ffi::OsString, path::Path, sync::Arc};
+use std::{
+    ffi::OsString,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use walkdir::WalkDir;
 
@@ -52,7 +56,6 @@ lazy_static! {
 pub struct PlayList {
     pub items: Vec<PlayListItem>,
     pub now_playing: Option<usize>,
-    pub next_index: Option<usize>,
 }
 
 impl PlayList {
@@ -60,12 +63,41 @@ impl PlayList {
         Self {
             items: Vec::new(),
             now_playing: None,
-            next_index: None,
         }
     }
 
     pub fn load_from_path(&mut self, root_path: &str) {
         load_from_path(root_path, &mut self.items);
+    }
+
+    fn poll_module(&mut self) -> Option<Module> {
+        let computed_next = self.now_playing.map(|n| n + 1).unwrap_or_else(|| 0);
+        let maybe_item = self.items.get(computed_next);
+
+        let maybe_module = if let Some(item) = maybe_item {
+            match open_module_from_mod_path(&item.mod_path) {
+                Ok(module) => Some(module),
+                Err(e) => {
+                    log::error!(
+                        "Error loading module {:?}: {}",
+                        item.mod_path.root_path.to_string_lossy(),
+                        e
+                    );
+                    None
+                }
+            }
+        } else {
+            log::info!("No more mods to play!");
+            None
+        };
+
+        self.now_playing = if maybe_module.is_some() {
+            Some(computed_next)
+        } else {
+            None
+        };
+
+        maybe_module
     }
 }
 
@@ -125,35 +157,17 @@ fn load_from_dir<F: FnMut(ModPath)>(path: &Path, f: &mut F) {
 }
 
 pub struct PlayListModuleProvider {
-    playlist: Arc<PlayList>,
-    cursor: usize,
+    playlist: Arc<Mutex<PlayList>>,
 }
 
 impl PlayListModuleProvider {
-    pub fn new(playlist: Arc<PlayList>) -> Self {
-        Self { playlist, cursor: 0 }
+    pub fn new(playlist: Arc<Mutex<PlayList>>) -> Self {
+        Self { playlist }
     }
 }
 
 impl ModuleProvider for PlayListModuleProvider {
-    fn next_module(&mut self) -> Option<Module> {
-        if self.cursor < self.playlist.items.len() {
-            let item = &self.playlist.items[self.cursor];
-            self.cursor += 1;
-            match open_module_from_mod_path(&item.mod_path) {
-                Ok(module) => Some(module),
-                Err(e) => {
-                    log::error!(
-                        "Error loading module {:?}: {}",
-                        item.mod_path.root_path.to_string_lossy(),
-                        e
-                    );
-                    None
-                }
-            }
-        } else {
-            log::info!("No more mods to play!");
-            None
-        }
+    fn poll_module(&mut self) -> Option<Module> {
+        self.playlist.lock().unwrap().poll_module()
     }
 }

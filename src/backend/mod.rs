@@ -20,17 +20,22 @@ use crate::player::PlayState;
 pub use self::cpal::CpalBackend;
 
 pub trait ModuleProvider {
-    fn next_module(&mut self) -> Option<Module>;
+    fn poll_module(&mut self) -> Option<Module>;
 }
 
 pub enum BackendEvent {
     StartedPlaying { play_state: PlayState },
     PlayListExhausted,
 }
+pub enum ControlEvent {
+    Generic(Box<dyn FnOnce(&mut Module)>),
+    Reload,
+}
 
 pub trait Backend {
     fn start(&mut self);
     fn pause_resume(&mut self);
-    fn next(&mut self);
+    fn reload(&mut self);
     fn poll_event(&mut self) -> Option<BackendEvent>;
+    fn send_event(&mut self, event: ControlEvent);
 }

@@ -13,7 +13,6 @@
 
 use std::sync::{self, mpsc, Arc};
 
-use atomic::{Atomic, Ordering};
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Host, Stream,
@@ -22,7 +21,7 @@ use openmpt::module::Module;
 
 use crate::player::{ModuleInfo, MomentState, PlayState};
 
-use super::{Backend, BackendEvent, ModuleProvider};
+use super::{Backend, BackendEvent, ControlEvent, ModuleProvider};
 
 pub struct CpalBackend {
     pub host: Host,
@@ -31,10 +30,10 @@ pub struct CpalBackend {
     shared: Arc<CpalBackendShared>,
     paused: bool,
     receiver: mpsc::Receiver<BackendEvent>,
+    sender: mpsc::Sender<ControlEvent>,
 }
 
 struct CpalBackendShared {
-    pub next_requested: Atomic<bool>,
     pub sample_rate: usize,
 }
 
@@ -53,6 +52,7 @@ struct CpalBackendPrivate {
     module_provider: Box<dyn ModuleProvider>,
     stream: sync::Weak<Stream>, // Have to close the loop with Option.
     sender: mpsc::Sender<BackendEvent>,
+    receiver: mpsc::Receiver<ControlEvent>,
 }
 
 unsafe impl Send for CpalBackendPrivate {}
@@ -60,14 +60,22 @@ unsafe impl Send for CpalBackendPrivate {}
 impl CpalBackendPrivate {
     pub fn on_data_requested(&mut self, data: &mut [f32], _info: &cpal::OutputCallbackInfo) {
         let actual_read_bytes = loop {
-            if self.shared.next_requested.swap(false, Ordering::SeqCst) {
-                self.load_next();
-                continue;
+            while let Ok(ev) = self.receiver.try_recv() {
+                match ev {
+                    ControlEvent::Generic(f) => {
+                        if let CurrentModuleState::Loaded { ref mut module, .. } = self.module {
+                            f(module)
+                        }
+                    }
+                    ControlEvent::Reload => {
+                        self.reload();
+                    }
+                }
             }
 
             match self.module {
                 CurrentModuleState::NotLoaded => {
-                    self.load_next();
+                    self.reload();
                     continue;
                 }
                 CurrentModuleState::Exhausted => {
@@ -106,8 +114,8 @@ impl CpalBackendPrivate {
         data[actual_read_bytes..].fill(0.0f32);
     }
 
-    fn load_next(&mut self) {
-        self.module = if let Some(mut module) = self.module_provider.next_module() {
+    fn reload(&mut self) {
+        self.module = if let Some(mut module) = self.module_provider.poll_module() {
             let moment_state: Arc<MomentState> = Default::default();
             let play_state = PlayState {
                 module_info: ModuleInfo::from_module(&mut module),
@@ -164,12 +172,10 @@ impl CpalBackend {
         let config = config.with_sample_rate(cpal::SampleRate(sample_rate as u32));
         log::info!("Using output config: {:?}", config);
 
-        let shared = Arc::new(CpalBackendShared {
-            next_requested: Atomic::new(false),
-            sample_rate,
-        });
+        let shared = Arc::new(CpalBackendShared { sample_rate });
 
-        let (sender, receiver) = mpsc::channel();
+        let (ctrl_sender, ctrl_receiver) = mpsc::channel();
+        let (be_sender, be_receiver) = mpsc::channel();
 
         let stream = Arc::new_cyclic(|stream_weak| {
             let mut cpal_writer = CpalBackendPrivate {
@@ -177,7 +183,8 @@ impl CpalBackend {
                 module: CurrentModuleState::NotLoaded,
                 module_provider,
                 stream: stream_weak.clone(),
-                sender,
+                sender: be_sender,
+                receiver: ctrl_receiver,
             };
 
             device
@@ -197,7 +204,8 @@ impl CpalBackend {
             stream,
             shared,
             paused: false,
-            receiver,
+            receiver: be_receiver,
+            sender: ctrl_sender,
         }
     }
 }
@@ -217,8 +225,8 @@ impl Backend for CpalBackend {
         }
     }
 
-    fn next(&mut self) {
-        self.shared.next_requested.store(true, Ordering::SeqCst);
+    fn reload(&mut self) {
+        self.sender.send(ControlEvent::Reload).unwrap();
     }
 
     fn poll_event(&mut self) -> Option<BackendEvent> {
@@ -226,5 +234,9 @@ impl Backend for CpalBackend {
             Ok(ev) => Some(ev),
             Err(_) => None,
         }
+    }
+
+    fn send_event(&mut self, event: super::ControlEvent) {
+        self.sender.send(event).unwrap();
     }
 }

@@ -11,7 +11,7 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::options::Options;
 use crate::player::PlayState;
@@ -25,7 +25,7 @@ use anyhow::Result;
 pub struct AppState {
     pub play_state: Option<PlayState>,
     pub backend: Box<dyn Backend>,
-    pub playlist: Arc<PlayList>,
+    pub playlist: Arc<Mutex<PlayList>>,
     pub cur_module: usize,
 }
 
@@ -35,7 +35,7 @@ impl AppState {
     }
 
     pub fn next(&mut self) {
-        self.backend.next();
+        self.backend.reload();
     }
 
     pub fn pause_resume(&mut self) {
@@ -63,7 +63,7 @@ pub fn run(options: Options) -> Result<()> {
         playlist.load_from_path(path);
     }
 
-    let playlist = Arc::new(playlist);
+    let playlist = Arc::new(Mutex::new(playlist));
     let module_provider = Box::new(PlayListModuleProvider::new(playlist.clone()));
 
     let backend: Box<dyn Backend> =
