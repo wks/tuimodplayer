@@ -54,6 +54,9 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
                     KeyCode::Char('m') => {
                         app_state.next();
                     }
+                    KeyCode::Char('n') => {
+                        app_state.prev();
+                    }
                     KeyCode::Char(' ') => {
                         app_state.pause_resume();
                     }

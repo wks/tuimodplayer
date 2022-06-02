@@ -56,6 +56,7 @@ lazy_static! {
 pub struct PlayList {
     pub items: Vec<PlayListItem>,
     pub now_playing: Option<usize>,
+    pub next_to_play: Option<usize>,
 }
 
 impl PlayList {
@@ -63,6 +64,7 @@ impl PlayList {
         Self {
             items: Vec::new(),
             now_playing: None,
+            next_to_play: None,
         }
     }
 
@@ -70,34 +72,74 @@ impl PlayList {
         load_from_path(root_path, &mut self.items);
     }
 
-    fn poll_module(&mut self) -> Option<Module> {
-        let computed_next = self.now_playing.map(|n| n + 1).unwrap_or_else(|| 0);
-        let maybe_item = self.items.get(computed_next);
+    pub fn poll_module(&mut self) -> Option<Module> {
+        if self.next_to_play.is_none() {
+            self.goto_next_module();
+        }
 
-        let maybe_module = if let Some(item) = maybe_item {
-            match open_module_from_mod_path(&item.mod_path) {
-                Ok(module) => Some(module),
-                Err(e) => {
-                    log::error!(
-                        "Error loading module {:?}: {}",
-                        item.mod_path.root_path.to_string_lossy(),
-                        e
-                    );
-                    None
+        let maybe_module = loop {
+            if let Some(index) = self.next_to_play {
+                self.now_playing = self.next_to_play.take();
+
+                let item = self.items.get(index).unwrap_or_else(|| {
+                    panic!("next_to_play points to non-existing item: {}", index)
+                });
+
+                match open_module_from_mod_path(&item.mod_path) {
+                    Ok(module) => {
+                        break Some(module);
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Error loading module {:?}: {}",
+                            item.mod_path.root_path.to_string_lossy(),
+                            e
+                        );
+                    }
                 }
+
+                // Try the next in the playlist.
+                self.goto_next_module();
+            } else {
+                log::info!("No more mods to play!");
+                break None;
             }
-        } else {
-            log::info!("No more mods to play!");
-            None
         };
 
-        self.now_playing = if maybe_module.is_some() {
+        maybe_module
+    }
+
+    pub fn goto_next_module(&mut self) -> bool {
+        let computed_next = self.now_playing.map(|n| n + 1).unwrap_or_else(|| 0);
+        self.next_to_play = if computed_next < self.items.len() {
             Some(computed_next)
         } else {
             None
         };
 
-        maybe_module
+        self.next_to_play.is_some()
+    }
+
+    pub fn goto_previous_module(&mut self) -> bool {
+        assert!(
+            self.now_playing.is_none() || self.now_playing.unwrap() < self.items.len(),
+            "now_playing out of bound: {}, playlist length: {}",
+            self.now_playing.unwrap(),
+            self.items.len()
+        );
+
+        let computed_prev = self
+            .now_playing
+            .map(|cur| cur.saturating_sub(1))
+            .unwrap_or_else(|| 0);
+        self.next_to_play = if computed_prev < self.items.len() {
+            Some(computed_prev)
+        } else {
+            // The play list does not even have one item. In other words, the playlist is empty.
+            None
+        };
+
+        self.next_to_play.is_some()
     }
 }
 

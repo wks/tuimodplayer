@@ -35,6 +35,12 @@ impl AppState {
     }
 
     pub fn next(&mut self) {
+        self.playlist.lock().unwrap().goto_next_module();
+        self.backend.reload();
+    }
+
+    pub fn prev(&mut self) {
+        self.playlist.lock().unwrap().goto_previous_module();
         self.backend.reload();
     }
 
