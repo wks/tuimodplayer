@@ -17,7 +17,7 @@ use openmpt::module::{stream::ModuleStream, Logger, Module};
 
 use anyhow::{anyhow, Result};
 
-use crate::playlist::ModPath;
+use crate::{control::ModuleControl, playlist::ModPath};
 
 #[derive(Debug)]
 pub struct ModuleCreationError;
@@ -66,4 +66,9 @@ pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
     } else {
         todo!("Open from nested archives")
     }
+}
+
+pub fn apply_mod_settings(module: &mut Module, control: &ModuleControl) {
+    module.ctl_set_play_pitch_factor(control.pitch.output());
+    module.ctl_set_play_tempo_factor(control.tempo.output());
 }

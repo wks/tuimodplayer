@@ -13,20 +13,23 @@
 
 use std::sync::{Arc, Mutex};
 
+use crate::control::ModuleControl;
+
 use crate::options::Options;
 use crate::player::PlayState;
 use crate::playlist::{PlayList, PlayListModuleProvider};
 
-use crate::backend::{Backend, BackendEvent, CpalBackend};
+use crate::backend::{Backend, BackendEvent, ControlEvent, CpalBackend};
 use crate::ui::run_ui;
 
 use anyhow::Result;
 
 pub struct AppState {
+    pub options: Options,
     pub play_state: Option<PlayState>,
     pub backend: Box<dyn Backend>,
     pub playlist: Arc<Mutex<PlayList>>,
-    pub cur_module: usize,
+    pub control: ModuleControl,
 }
 
 impl AppState {
@@ -60,6 +63,32 @@ impl AppState {
             }
         }
     }
+
+    fn send_apply_mod_settings_event(&mut self) {
+        let control_clone = self.control.clone();
+        self.backend
+            .send_event(ControlEvent::UpdateControl(control_clone));
+    }
+
+    pub fn tempo_down(&mut self) {
+        self.control.tempo.dec();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn tempo_up(&mut self) {
+        self.control.tempo.inc();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn pitch_down(&mut self) {
+        self.control.pitch.dec();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn pitch_up(&mut self) {
+        self.control.pitch.inc();
+        self.send_apply_mod_settings_event();
+    }
 }
 
 pub fn run(options: Options) -> Result<()> {
@@ -72,14 +101,20 @@ pub fn run(options: Options) -> Result<()> {
     let playlist = Arc::new(Mutex::new(playlist));
     let module_provider = Box::new(PlayListModuleProvider::new(playlist.clone()));
 
-    let backend: Box<dyn Backend> =
-        Box::new(CpalBackend::new(options.sample_rate, module_provider));
+    let control = ModuleControl::default();
+
+    let backend: Box<dyn Backend> = Box::new(CpalBackend::new(
+        options.sample_rate,
+        module_provider,
+        control.clone(),
+    ));
 
     let mut app_state = AppState {
+        options,
         play_state: None,
         backend,
         playlist,
-        cur_module: 0,
+        control,
     };
 
     app_state.start_playing();

@@ -57,6 +57,18 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
                     KeyCode::Char('n') => {
                         app_state.prev();
                     }
+                    KeyCode::Char('u') => {
+                        app_state.tempo_down();
+                    }
+                    KeyCode::Char('i') => {
+                        app_state.tempo_up();
+                    }
+                    KeyCode::Char('o') => {
+                        app_state.pitch_down();
+                    }
+                    KeyCode::Char('p') => {
+                        app_state.pitch_up();
+                    }
                     KeyCode::Char(' ') => {
                         app_state.pause_resume();
                     }
@@ -89,7 +101,7 @@ fn render_ui(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
 
     let split2 = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(10), Constraint::Min(1)].as_ref())
+        .constraints([Constraint::Length(15), Constraint::Min(1)].as_ref())
         .split(split1[0]);
 
     let split3 = Layout::default()
@@ -122,6 +134,11 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
             tempo,
         } = play_state.moment_state.load_atomic();
 
+        let sample_rate = app_state.options.sample_rate;
+
+        let tempo_factor = app_state.control.tempo.output();
+        let pitch_factor = app_state.control.pitch.output();
+
         let mut max_key_len = 0;
         let mut rows = vec![];
 
@@ -141,7 +158,9 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
         add_row("Row", format!("{}", row));
         add_row("Speed", format!("{}", speed));
         add_row("Tempo", format!("{}", tempo));
-        //add_row("Sample rate", format!("{}", sample_rate));
+        add_row("Sample rate", format!("{}", sample_rate));
+        add_row("Tempo factor", format!("{}", tempo_factor));
+        add_row("Pitch factor", format!("{}", pitch_factor));
 
         let table_layout = [
             Constraint::Length(max_key_len as u16),

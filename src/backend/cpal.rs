@@ -19,7 +19,11 @@ use cpal::{
 };
 use openmpt::module::Module;
 
-use crate::player::{ModuleInfo, MomentState, PlayState};
+use crate::{
+    control::ModuleControl,
+    module_file::apply_mod_settings,
+    player::{ModuleInfo, MomentState, PlayState},
+};
 
 use super::{Backend, BackendEvent, ControlEvent, ModuleProvider};
 
@@ -53,6 +57,7 @@ struct CpalBackendPrivate {
     stream: sync::Weak<Stream>, // Have to close the loop with Option.
     sender: mpsc::Sender<BackendEvent>,
     receiver: mpsc::Receiver<ControlEvent>,
+    control: ModuleControl,
 }
 
 unsafe impl Send for CpalBackendPrivate {}
@@ -69,6 +74,12 @@ impl CpalBackendPrivate {
                     }
                     ControlEvent::Reload => {
                         self.reload();
+                    }
+                    ControlEvent::UpdateControl(control) => {
+                        self.control = control;
+                        if let CurrentModuleState::Loaded { ref mut module, .. } = self.module {
+                            apply_mod_settings(module, &self.control);
+                        }
                     }
                 }
             }
@@ -116,6 +127,7 @@ impl CpalBackendPrivate {
 
     fn reload(&mut self) {
         self.module = if let Some(mut module) = self.module_provider.poll_module() {
+            apply_mod_settings(&mut module, &self.control);
             let moment_state: Arc<MomentState> = Default::default();
             let play_state = PlayState {
                 module_info: ModuleInfo::from_module(&mut module),
@@ -144,7 +156,11 @@ impl CpalBackendPrivate {
 }
 
 impl CpalBackend {
-    pub fn new(sample_rate: usize, module_provider: Box<dyn ModuleProvider>) -> CpalBackend {
+    pub fn new(
+        sample_rate: usize,
+        module_provider: Box<dyn ModuleProvider>,
+        control: ModuleControl,
+    ) -> CpalBackend {
         let host = cpal::default_host();
 
         let device = host.default_output_device().expect("No default device");
@@ -185,6 +201,7 @@ impl CpalBackend {
                 stream: stream_weak.clone(),
                 sender: be_sender,
                 receiver: ctrl_receiver,
+                control,
             };
 
             device

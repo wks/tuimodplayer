@@ -13,6 +13,7 @@
 
 mod app;
 mod backend;
+mod control;
 mod logging;
 mod module_file;
 mod options;

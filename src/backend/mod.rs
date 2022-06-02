@@ -15,7 +15,7 @@ mod cpal;
 
 use openmpt::module::Module;
 
-use crate::player::PlayState;
+use crate::{control::ModuleControl, player::PlayState};
 
 pub use self::cpal::CpalBackend;
 
@@ -28,8 +28,15 @@ pub enum BackendEvent {
     PlayListExhausted,
 }
 pub enum ControlEvent {
-    Generic(Box<dyn FnOnce(&mut Module)>),
+    Generic(Box<dyn FnOnce(&mut Module) + Send + 'static>),
     Reload,
+    UpdateControl(ModuleControl),
+}
+
+impl ControlEvent {
+    pub fn generic(f: impl FnOnce(&mut Module) + Send + 'static) -> Self {
+        Self::Generic(Box::new(f))
+    }
 }
 
 pub trait Backend {
