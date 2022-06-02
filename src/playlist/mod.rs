@@ -77,6 +77,8 @@ impl PlayList {
             self.goto_next_module();
         }
 
+        let mut retries = 0;
+
         let maybe_module = loop {
             if let Some(index) = self.next_to_play {
                 self.now_playing = self.next_to_play.take();
@@ -98,6 +100,11 @@ impl PlayList {
                     }
                 }
 
+                retries += 1;
+                if retries >= self.items.len() {
+                    break None;
+                }
+
                 // Try the next in the playlist.
                 self.goto_next_module();
             } else {
@@ -110,36 +117,32 @@ impl PlayList {
     }
 
     pub fn goto_next_module(&mut self) -> bool {
-        let computed_next = self.now_playing.map(|n| n + 1).unwrap_or_else(|| 0);
-        self.next_to_play = if computed_next < self.items.len() {
-            Some(computed_next)
-        } else {
+        let maybe_next = if self.items.is_empty() {
             None
+        } else if let Some(n) = self.now_playing {
+            let len = self.items.len();
+            Some((n + 1) % len)
+        } else {
+            Some(0)
         };
 
-        self.next_to_play.is_some()
+        self.next_to_play = maybe_next;
+        maybe_next.is_some()
     }
 
     pub fn goto_previous_module(&mut self) -> bool {
-        assert!(
-            self.now_playing.is_none() || self.now_playing.unwrap() < self.items.len(),
-            "now_playing out of bound: {}, playlist length: {}",
-            self.now_playing.unwrap(),
-            self.items.len()
-        );
-
-        let computed_prev = self
-            .now_playing
-            .map(|cur| cur.saturating_sub(1))
-            .unwrap_or_else(|| 0);
-        self.next_to_play = if computed_prev < self.items.len() {
-            Some(computed_prev)
-        } else {
-            // The play list does not even have one item. In other words, the playlist is empty.
+        let maybe_next = if self.items.is_empty() {
             None
+        } else if let Some(n) = self.now_playing {
+            let len = self.items.len();
+            Some((n + len - 1) % len)
+        } else {
+            let len = self.items.len();
+            Some(len - 1)
         };
 
-        self.next_to_play.is_some()
+        self.next_to_play = maybe_next;
+        maybe_next.is_some()
     }
 }
 
