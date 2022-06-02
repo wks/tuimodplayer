@@ -89,6 +89,46 @@ impl AppState {
         self.control.pitch.inc();
         self.send_apply_mod_settings_event();
     }
+
+    pub fn gain_down(&mut self) {
+        self.control.gain.dec();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn gain_up(&mut self) {
+        self.control.gain.inc();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn stereo_separation_down(&mut self) {
+        self.control.stereo_separation.dec();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn stereo_separation_up(&mut self) {
+        self.control.stereo_separation.inc();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn filter_taps_down(&mut self) {
+        self.control.filter_taps.dec();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn filter_taps_up(&mut self) {
+        self.control.filter_taps.inc();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn volume_ramping_down(&mut self) {
+        self.control.volume_ramping.dec();
+        self.send_apply_mod_settings_event();
+    }
+
+    pub fn volume_ramping_up(&mut self) {
+        self.control.volume_ramping.inc();
+        self.send_apply_mod_settings_event();
+    }
 }
 
 pub fn run(options: Options) -> Result<()> {

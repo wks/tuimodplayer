@@ -69,6 +69,30 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
                     KeyCode::Char('p') => {
                         app_state.pitch_up();
                     }
+                    KeyCode::Char('3') => {
+                        app_state.gain_down();
+                    }
+                    KeyCode::Char('4') => {
+                        app_state.gain_up();
+                    }
+                    KeyCode::Char('5') => {
+                        app_state.stereo_separation_down();
+                    }
+                    KeyCode::Char('6') => {
+                        app_state.stereo_separation_up();
+                    }
+                    KeyCode::Char('7') => {
+                        app_state.filter_taps_down();
+                    }
+                    KeyCode::Char('8') => {
+                        app_state.filter_taps_up();
+                    }
+                    KeyCode::Char('9') => {
+                        app_state.volume_ramping_down();
+                    }
+                    KeyCode::Char('0') => {
+                        app_state.volume_ramping_up();
+                    }
                     KeyCode::Char(' ') => {
                         app_state.pause_resume();
                     }
@@ -138,6 +162,10 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
 
         let tempo_factor = app_state.control.tempo.output();
         let pitch_factor = app_state.control.pitch.output();
+        let gain = app_state.control.gain.output();
+        let stereo_separation = app_state.control.stereo_separation.output();
+        let filter_taps = app_state.control.filter_taps.output();
+        let volume_ramping = app_state.control.volume_ramping.output();
 
         let mut max_key_len = 0;
         let mut rows = vec![];
@@ -161,6 +189,10 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
         add_row("Sample rate", format!("{}", sample_rate));
         add_row("Tempo factor", format!("{}", tempo_factor));
         add_row("Pitch factor", format!("{}", pitch_factor));
+        add_row("Gain", format!("{}", gain));
+        add_row("Stereo separation", format!("{}", stereo_separation));
+        add_row("Filter taps", format!("{}", filter_taps));
+        add_row("Volume ramping", format!("{}", volume_ramping));
 
         let table_layout = [
             Constraint::Length(max_key_len as u16),

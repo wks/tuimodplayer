@@ -71,4 +71,8 @@ pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
 pub fn apply_mod_settings(module: &mut Module, control: &ModuleControl) {
     module.ctl_set_play_pitch_factor(control.pitch.output());
     module.ctl_set_play_tempo_factor(control.tempo.output());
+    module.set_render_mastergain_millibel(control.gain.output());
+    module.set_render_stereo_separation(control.stereo_separation.output());
+    module.set_render_interpolation_filter_length(control.filter_taps.output());
+    module.set_render_volume_ramping(control.volume_ramping.output());
 }

@@ -11,12 +11,16 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use num_traits::Num;
+use num_traits::{FromPrimitive, Num};
 
 #[derive(Clone)]
 pub struct ModuleControl {
-    pub tempo: ControlField,
-    pub pitch: ControlField,
+    pub tempo: ControlField<f64>,
+    pub pitch: ControlField<f64>,
+    pub gain: ControlField<i32>,
+    pub stereo_separation: ControlField<i32>,
+    pub filter_taps: ControlField<i32>,
+    pub volume_ramping: ControlField<i32>,
 }
 
 impl Default for ModuleControl {
@@ -24,6 +28,10 @@ impl Default for ModuleControl {
         Self {
             tempo: ControlField::new(&controls::TEMPO),
             pitch: ControlField::new(&controls::PITCH),
+            gain: ControlField::new(&controls::GAIN),
+            stereo_separation: ControlField::new(&controls::STEREO_SEPARATION),
+            filter_taps: ControlField::new(&controls::FILTER_TAPS),
+            volume_ramping: ControlField::new(&controls::VOLUME_RAMPING),
         }
     }
 }
@@ -31,7 +39,7 @@ impl Default for ModuleControl {
 mod controls {
     use super::{ControlScale, ControlSpec};
 
-    pub const TEMPO: ControlSpec<i32> = ControlSpec::<i32> {
+    pub const TEMPO: ControlSpec<f64> = ControlSpec {
         low: -48,
         high: 48,
         default: 0,
@@ -42,7 +50,7 @@ mod controls {
         },
     };
 
-    pub const PITCH: ControlSpec<i32> = ControlSpec::<i32> {
+    pub const PITCH: ControlSpec<f64> = ControlSpec {
         low: -48,
         high: 48,
         default: 0,
@@ -50,18 +58,62 @@ mod controls {
         scale: ControlScale::Logarithmic {
             base: 2.0,
             denominator: 24.0,
+        },
+    };
+
+    pub const GAIN: ControlSpec<i32> = ControlSpec {
+        low: i32::MIN,
+        high: i32::MAX,
+        default: 0,
+        step: 1,
+        scale: ControlScale::Linear {
+            factor: 100,
+            offset: 0,
+        },
+    };
+
+    pub const STEREO_SEPARATION: ControlSpec<i32> = ControlSpec {
+        low: 0,
+        high: i32::MAX,
+        default: 100,
+        step: 5,
+        scale: ControlScale::Linear {
+            factor: 1,
+            offset: 0,
+        },
+    };
+
+    pub const FILTER_TAPS: ControlSpec<i32> = ControlSpec {
+        low: 0,
+        high: 3,
+        default: 3,
+        step: 1,
+        scale: ControlScale::Logarithmic {
+            base: 2.0, // For powers of two, the pow operation is still precise.
+            denominator: 1.0,
+        },
+    };
+
+    pub const VOLUME_RAMPING: ControlSpec<i32> = ControlSpec {
+        low: -1,
+        high: 10,
+        default: -1,
+        step: 1,
+        scale: ControlScale::Linear {
+            factor: 1,
+            offset: 0,
         },
     };
 }
 
 #[derive(Clone)]
-pub struct ControlField {
+pub struct ControlField<T: Num + FromPrimitive + Copy + 'static> {
     value: i32,
-    spec: &'static ControlSpec<i32>,
+    spec: &'static ControlSpec<T>,
 }
 
-impl ControlField {
-    pub fn new(spec: &'static ControlSpec<i32>) -> Self {
+impl<T: Num + Copy + FromPrimitive> ControlField<T> {
+    pub fn new(spec: &'static ControlSpec<T>) -> Self {
         Self {
             value: spec.default,
             spec,
@@ -69,33 +121,44 @@ impl ControlField {
     }
 
     pub fn inc(&mut self) {
-        self.value = (self.value + self.spec.step).min(self.spec.high);
+        self.value = self
+            .value
+            .saturating_add(self.spec.step)
+            .min(self.spec.high);
     }
 
     pub fn dec(&mut self) {
-        self.value = (self.value - self.spec.step).max(self.spec.low);
+        self.value = self.value.saturating_sub(self.spec.step).max(self.spec.low);
     }
 
-    pub fn output(&self) -> f64 {
-        let value_f64 = self.value as f64;
+    pub fn output(&self) -> T {
         match self.spec.scale {
-            ControlScale::Linear { factor, offset } => (value_f64) * factor + offset,
-            ControlScale::Logarithmic { base, denominator } => base.powf(value_f64 / denominator),
+            ControlScale::Linear { factor, offset } => {
+                let value_t = T::from_i32(self.value)
+                    .unwrap_or_else(|| panic!("Cannot convert {} to T", self.value));
+                value_t * factor + offset
+            }
+            ControlScale::Logarithmic { base, denominator } => {
+                let value_f64 = self.value as f64;
+                let result_f64 = base.powf(value_f64 / denominator);
+                T::from_f64(result_f64)
+                    .unwrap_or_else(|| panic!("Cannot convert {} to T", result_f64))
+            }
         }
     }
 }
 
 pub struct ControlSpec<T: Num> {
-    low: T,
-    high: T,
-    default: T,
-    step: T,
-    scale: ControlScale,
+    low: i32,
+    high: i32,
+    default: i32,
+    step: i32,
+    scale: ControlScale<T>,
 }
 
-pub enum ControlScale {
+pub enum ControlScale<T> {
     /// Linear scale.  `y = x * factor + offset`
-    Linear { factor: f64, offset: f64 },
+    Linear { factor: T, offset: T },
     /// Logrithmic scale.  `y = base ^ (x / denominator)`
     Logarithmic { base: f64, denominator: f64 },
 }
