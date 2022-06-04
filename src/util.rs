@@ -22,11 +22,16 @@ pub fn add_modulo_unsigned<T: PrimInt + Unsigned + Debug>(a: T, b: T, m: T) -> T
     debug_assert!(b < m);
 
     // (a + b) may overflow, but (m - b) may not, given b < m.
-    if a > m - b {
-        a - (m - b)
+    let result = if a >= m - b {
+        // a + b >= m.  We need to subtract the result by m.
+        a - (m - b) // Equivalent to (a + b - m), but without overflow.
     } else {
+        // a + b < m.  Add directly.
         a + b
-    }
+    };
+
+    debug_assert!(result < m, "result = {:?}, m = {:?}", result, m);
+    result
 }
 
 /// Compute (a - b) % m
@@ -34,10 +39,16 @@ pub fn sub_modulo_unsigned<T: PrimInt + Unsigned + Debug>(a: T, b: T, m: T) -> T
     debug_assert_ne!(m, Zero::zero());
     debug_assert!(a < m);
     debug_assert!(b < m);
-    if a > b {
+
+    let result = if a >= b {
+        // a >= b.  The result is non-negative.
         a - b
     } else {
+        // b > a.  Need to add m to the result.
         // (a + b) may overflow, but (m - b) may not, given b < m.
-        a + (m - b)
-    }
+        a + (m - b) // Equivalent to (a - b + m), but without overflow.
+    };
+
+    debug_assert!(result < m);
+    result
 }

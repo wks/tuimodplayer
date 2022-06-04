@@ -11,7 +11,7 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::{io::stdout, time::Duration};
+use std::{io::stdout, panic::PanicInfo, time::Duration};
 
 use crate::{
     app::AppState,
@@ -31,7 +31,31 @@ use tui::{
 
 use anyhow::Result;
 
+static mut OLD_HOOK: Option<Box<dyn Fn(&PanicInfo) + Sync + Send>> = None;
+static REGISTER_PANIC_HOOK: std::sync::Once = std::sync::Once::new();
+
+fn ui_panic_hook(panic_info: &PanicInfo<'_>) {
+    execute!(stdout(), terminal::LeaveAlternateScreen).unwrap_or_else(|e| {
+        // Cannot handle error while handling panic.  Printing is the best effort.
+        eprintln!("Failed to leave alternative screen: {}", e);
+    });
+    crate::logging::set_stderr_enabled(true);
+    terminal::disable_raw_mode().unwrap_or_else(|e| {
+        // Cannot handle error while handling panic.  Printing is the best effort.
+        eprintln!("Failed to disable raw mode: {}", e);
+    });
+    let old_hook = unsafe { OLD_HOOK.as_ref().unwrap() };
+    old_hook(panic_info);
+}
+
 pub fn run_ui(app_state: &mut AppState) -> Result<()> {
+    REGISTER_PANIC_HOOK.call_once(|| {
+        unsafe {
+            OLD_HOOK = Some(std::panic::take_hook());
+        }
+        std::panic::set_hook(Box::new(ui_panic_hook));
+    });
+
     terminal::enable_raw_mode()?;
 
     crate::logging::set_stderr_enabled(false);

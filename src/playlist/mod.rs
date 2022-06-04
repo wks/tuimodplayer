@@ -21,7 +21,11 @@ use std::{
 
 use walkdir::WalkDir;
 
-use crate::{backend::ModuleProvider, module_file::open_module_from_mod_path, util::{add_modulo_unsigned, sub_modulo_unsigned}};
+use crate::{
+    backend::ModuleProvider,
+    module_file::open_module_from_mod_path,
+    util::{add_modulo_unsigned, sub_modulo_unsigned},
+};
 
 pub struct ModPath {
     pub root_path: OsString,
