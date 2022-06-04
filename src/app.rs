@@ -38,12 +38,22 @@ impl AppState {
     }
 
     pub fn next(&mut self) {
-        self.playlist.lock().unwrap().goto_next_module();
+        self.playlist.lock().unwrap().goto_next_module(1);
         self.backend.reload();
     }
 
     pub fn prev(&mut self) {
-        self.playlist.lock().unwrap().goto_previous_module();
+        self.playlist.lock().unwrap().goto_previous_module(1);
+        self.backend.reload();
+    }
+
+    pub fn next10(&mut self) {
+        self.playlist.lock().unwrap().goto_next_module(10);
+        self.backend.reload();
+    }
+
+    pub fn prev10(&mut self) {
+        self.playlist.lock().unwrap().goto_previous_module(10);
         self.backend.reload();
     }
 

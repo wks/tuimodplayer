@@ -21,7 +21,7 @@ use std::{
 
 use walkdir::WalkDir;
 
-use crate::{backend::ModuleProvider, module_file::open_module_from_mod_path};
+use crate::{backend::ModuleProvider, module_file::open_module_from_mod_path, util::{add_modulo_unsigned, sub_modulo_unsigned}};
 
 pub struct ModPath {
     pub root_path: OsString,
@@ -74,7 +74,7 @@ impl PlayList {
 
     pub fn poll_module(&mut self) -> Option<Module> {
         if self.next_to_play.is_none() {
-            self.goto_next_module();
+            self.goto_next_module(1);
         }
 
         let mut retries = 0;
@@ -106,7 +106,7 @@ impl PlayList {
                 }
 
                 // Try the next in the playlist.
-                self.goto_next_module();
+                self.goto_next_module(1);
             } else {
                 log::info!("No more mods to play!");
                 break None;
@@ -116,12 +116,12 @@ impl PlayList {
         maybe_module
     }
 
-    pub fn goto_next_module(&mut self) -> bool {
+    pub fn goto_next_module(&mut self, steps: usize) -> bool {
         let maybe_next = if self.items.is_empty() {
             None
         } else if let Some(n) = self.now_playing {
             let len = self.items.len();
-            Some((n + 1) % len)
+            Some(add_modulo_unsigned(n, steps % len, len))
         } else {
             Some(0)
         };
@@ -130,12 +130,12 @@ impl PlayList {
         maybe_next.is_some()
     }
 
-    pub fn goto_previous_module(&mut self) -> bool {
+    pub fn goto_previous_module(&mut self, steps: usize) -> bool {
         let maybe_next = if self.items.is_empty() {
             None
         } else if let Some(n) = self.now_playing {
             let len = self.items.len();
-            Some((n + len - 1) % len)
+            Some(sub_modulo_unsigned(n, steps % len, len))
         } else {
             let len = self.items.len();
             Some(len - 1)

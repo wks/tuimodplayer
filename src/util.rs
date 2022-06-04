@@ -1,3 +1,5 @@
+use num_traits::{PrimInt, Unsigned, Zero};
+
 // Copyright 2022 Kunshan Wang
 //
 // This file is part of TUIModPlayer.  TUIModPlayer is free software: you can redistribute it
@@ -11,38 +13,31 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-mod app;
-mod backend;
-mod control;
-mod logging;
-mod module_file;
-mod options;
-mod player;
-mod playlist;
-mod ui;
-mod util;
+use std::fmt::Debug;
 
-use clap::Parser;
-use options::Options;
+/// Compute (a + b) % m
+pub fn add_modulo_unsigned<T: PrimInt + Unsigned + Debug>(a: T, b: T, m: T) -> T {
+    debug_assert_ne!(m, Zero::zero());
+    debug_assert!(a < m);
+    debug_assert!(b < m);
 
-fn print_error_and_exit(msg: &str, e: &dyn std::error::Error) -> ! {
-    eprintln!("{}: {}", msg, e);
-    let mut src = e.source();
-    while let Some(e) = src {
-        eprintln!("  Cause by: {}", e);
-        src = e.source();
+    // (a + b) may overflow, but (m - b) may not, given b < m.
+    if a > m - b {
+        a - (m - b)
+    } else {
+        a + b
     }
-
-    std::process::exit(1);
 }
 
-fn main() {
-    if let Err(e) = crate::logging::init() {
-        print_error_and_exit("Failed to initialize logger", &e);
-    }
-
-    let options = Options::parse();
-    if let Err(e) = app::run(options) {
-        print_error_and_exit("TUIModPlayer exited with an error", e.as_ref());
+/// Compute (a - b) % m
+pub fn sub_modulo_unsigned<T: PrimInt + Unsigned + Debug>(a: T, b: T, m: T) -> T {
+    debug_assert_ne!(m, Zero::zero());
+    debug_assert!(a < m);
+    debug_assert!(b < m);
+    if a > b {
+        a - b
+    } else {
+        // (a + b) may overflow, but (m - b) may not, given b < m.
+        a + (m - b)
     }
 }

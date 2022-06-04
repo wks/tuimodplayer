@@ -57,6 +57,12 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
                     KeyCode::Char('n') => {
                         app_state.prev();
                     }
+                    KeyCode::Char('M') => {
+                        app_state.next10();
+                    }
+                    KeyCode::Char('N') => {
+                        app_state.prev10();
+                    }
                     KeyCode::Char('u') => {
                         app_state.tempo_down();
                     }
@@ -228,7 +234,14 @@ fn render_playlist(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState
         })
         .collect();
 
-    let block = Block::default().title("Playlist").borders(Borders::ALL);
+    let now_playing_text = now_playing
+        .map(|n| n.to_string())
+        .unwrap_or_else(|| "-".to_string());
+    let n_items = items.len();
+
+    let block = Block::default()
+        .title(format!("Playlist {}/{}", now_playing_text, n_items))
+        .borders(Borders::ALL);
 
     let items = List::new(items)
         .block(block)
