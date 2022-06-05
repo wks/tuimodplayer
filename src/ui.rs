@@ -161,22 +161,23 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
 }
 
 fn render_ui(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
-    let [left, right] = Layout::default()
+    let [left, message] = Layout::default()
         .direction(Direction::Horizontal)
-        .split_n(area, [Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)]);
+        .split_n(area, [Constraint::Min(10), Constraint::Length(24)]);
 
-    let [left_top, left_bottom] = Layout::default()
+    let [state, left_bottom] = Layout::default()
         .direction(Direction::Vertical)
         .split_n(left, [Constraint::Length(15), Constraint::Min(1)]);
 
-    let [right_top, right_bottom] = Layout::default()
-        .direction(Direction::Vertical)
-        .split_n(right, [Constraint::Min(1), Constraint::Length(10)]);
+    let [playlist, log] = Layout::default().direction(Direction::Horizontal).split_n(
+        left_bottom,
+        [Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)],
+    );
 
-    render_state(f, left_top, app_state);
-    render_playlist(f, left_bottom, app_state);
-    render_message(f, right_top, app_state);
-    render_log(f, right_bottom, app_state);
+    render_state(f, state, app_state);
+    render_playlist(f, playlist, app_state);
+    render_message(f, message, app_state);
+    render_log(f, log, app_state);
 }
 
 fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
@@ -311,7 +312,7 @@ fn render_message(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState)
 }
 
 fn render_log(f: &mut Frame<impl Backend>, area: Rect, _app_state: &AppState) {
-    let text = crate::logging::last_n_records(10)
+    let text = crate::logging::last_n_records(area.height as usize)
         .iter()
         .map(|line| Spans::from(line.clone()))
         .collect::<Vec<_>>();
