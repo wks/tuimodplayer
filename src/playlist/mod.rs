@@ -16,9 +16,11 @@ use openmpt::module::Module;
 use std::{
     borrow::Cow,
     ffi::OsString,
+    fs::File,
     path::Path,
     sync::{Arc, Mutex},
 };
+use zip::read::ZipFile;
 
 use walkdir::WalkDir;
 
@@ -75,6 +77,15 @@ pub fn extension_is_supported(path: &Path) -> bool {
         SUPPORTED_EXTENSIONS_OSSTR
             .iter()
             .any(|sup_ext| ext_lower == *sup_ext)
+    } else {
+        false
+    }
+}
+
+pub fn extension_is_archive(path: &Path) -> bool {
+    if let Some(ext) = path.extension() {
+        let ext_lower = ext.to_ascii_lowercase();
+        ext_lower == "zip"
     } else {
         false
     }
@@ -203,7 +214,7 @@ fn load_from_file<F: FnMut(ModPath)>(root_path: &str, path: &Path, f: &mut F) {
     };
 
     if is_archive {
-        todo!("Load from zip");
+        load_from_archive(root_path, path, f);
     } else {
         f(ModPath {
             root_path: root_path.into(),
@@ -229,6 +240,37 @@ fn load_from_dir<F: FnMut(ModPath)>(root_path: &str, path: &Path, f: &mut F) {
                 })
             }
         })
+}
+
+fn for_each_file_in_archive<F: FnMut(ZipFile<'_>)>(path: &Path, mut f: F) {
+    match File::open(path) {
+        Ok(file) => match zip::ZipArchive::new(file) {
+            Ok(ref mut zip) => {
+                for i in 0..zip.len() {
+                    match zip.by_index(i) {
+                        Ok(zip_file) => f(zip_file),
+                        Err(e) => {
+                            log::debug!("Skip invalid zip: {:?} Error: {}", path, e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                log::debug!("Skip invalid zip: {:?} Error: {}", path, e);
+            }
+        },
+        Err(e) => {
+            log::debug!("Skip unopenable file: {:?} Error: {}", path, e);
+        }
+    }
+}
+
+fn load_from_archive<F: FnMut(ModPath)>(_root_path: &str, path: &Path, _f: &mut F) {
+    debug_assert!(extension_is_archive(path), "{:?} is not archive", path);
+
+    for_each_file_in_archive(path, |zip_file| {
+        log::info!("I see file: {}", zip_file.name());
+    });
 }
 
 pub struct PlayListModuleProvider {
