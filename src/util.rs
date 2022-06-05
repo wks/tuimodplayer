@@ -1,4 +1,5 @@
 use num_traits::{PrimInt, Unsigned, Zero};
+use tui::layout::{Constraint, Layout, Rect};
 
 // Copyright 2022 Kunshan Wang
 //
@@ -51,4 +52,21 @@ pub fn sub_modulo_unsigned<T: PrimInt + Unsigned + Debug>(a: T, b: T, m: T) -> T
 
     debug_assert!(result < m);
     result
+}
+
+pub trait LayoutSplitN {
+    fn split_n<const N: usize>(self, area: Rect, constraints: [Constraint; N]) -> [Rect; N];
+}
+
+impl LayoutSplitN for Layout {
+    fn split_n<const N: usize>(self, area: Rect, constraints: [Constraint; N]) -> [Rect; N] {
+        let results = self.constraints(constraints).split(area);
+        assert_eq!(results.len(), N);
+        let mut index = 0;
+        [(); N].map(|_| {
+            let my_index = index;
+            index += 1;
+            results[my_index]
+        })
+    }
 }

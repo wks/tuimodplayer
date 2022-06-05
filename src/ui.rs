@@ -16,9 +16,13 @@ use std::{io::stdout, panic::PanicInfo, time::Duration};
 use crate::{
     app::AppState,
     player::{ModuleInfo, MomentStateCopy},
+    util::LayoutSplitN,
 };
 
-use crossterm::{event::{self, KeyModifiers}, execute, terminal};
+use crossterm::{
+    event::{self, KeyModifiers},
+    execute, terminal,
+};
 
 use tui::{
     backend::Backend,
@@ -157,25 +161,22 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
 }
 
 fn render_ui(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
-    let split1 = Layout::default()
+    let [left, right] = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)].as_ref())
-        .split(area);
+        .split_n(area, [Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)]);
 
-    let split2 = Layout::default()
+    let [left_top, left_bottom] = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(15), Constraint::Min(1)].as_ref())
-        .split(split1[0]);
+        .split_n(left, [Constraint::Length(15), Constraint::Min(1)]);
 
-    let split3 = Layout::default()
+    let [right_top, right_bottom] = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(10)].as_ref())
-        .split(split1[1]);
+        .split_n(right, [Constraint::Min(1), Constraint::Length(10)]);
 
-    render_state(f, split2[0], app_state);
-    render_playlist(f, split2[1], app_state);
-    render_message(f, split3[0], app_state);
-    render_log(f, split3[1], app_state);
+    render_state(f, left_top, app_state);
+    render_playlist(f, left_bottom, app_state);
+    render_message(f, right_top, app_state);
+    render_log(f, right_bottom, app_state);
 }
 
 fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
