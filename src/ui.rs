@@ -18,7 +18,7 @@ use crate::{
     player::{ModuleInfo, MomentStateCopy},
 };
 
-use crossterm::{event, execute, terminal};
+use crossterm::{event::{self, KeyModifiers}, execute, terminal};
 
 use tui::{
     backend::Backend,
@@ -65,13 +65,18 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
     let mut term = tui::Terminal::new(backend)?;
 
     loop {
+        let mut redraw = false;
+
         if event::poll(Duration::from_millis(100))? {
             let ev = event::read()?;
             use event::{Event, KeyCode, KeyEvent};
             #[allow(clippy::single_match)] // Will add more event handling in the future
             #[allow(clippy::collapsible_match)]
             match ev {
-                Event::Key(KeyEvent { code, modifiers: _ }) => match code {
+                Event::Key(KeyEvent { code, modifiers }) => match code {
+                    KeyCode::Char('l') if modifiers.contains(KeyModifiers::CONTROL) => {
+                        redraw = true;
+                    }
                     KeyCode::Char('q') => {
                         break;
                     }
@@ -133,6 +138,10 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
         }
 
         app_state.handle_backend_events();
+
+        if std::mem::take(&mut redraw) {
+            term.clear()?;
+        }
 
         term.draw(|f| {
             render_ui(f, f.size(), app_state);
