@@ -55,12 +55,12 @@ pub fn open_module_file(file_path: String) -> Result<Module> {
 }
 
 pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
-    let file = File::open(&mod_path.root_path)?;
+    let file = File::open(&mod_path.file_path)?;
 
     if mod_path.archive_paths.is_empty() {
         log::info!(
             "Opening root path as module: {}",
-            mod_path.root_path.to_string_lossy()
+            mod_path.file_path.to_string_lossy()
         );
         Ok(open_module(file)?)
     } else {

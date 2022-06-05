@@ -14,6 +14,7 @@
 use lazy_static::lazy_static;
 use openmpt::module::Module;
 use std::{
+    borrow::Cow,
     ffi::OsString,
     path::Path,
     sync::{Arc, Mutex},
@@ -29,7 +30,18 @@ use crate::{
 
 pub struct ModPath {
     pub root_path: OsString,
+    pub file_path: OsString,
     pub archive_paths: Vec<String>,
+}
+
+impl ModPath {
+    pub fn display_name(&self) -> Cow<'_, str> {
+        let file_path = Path::new(&self.file_path);
+        file_path
+            .file_name()
+            .unwrap_or(self.file_path.as_os_str())
+            .to_string_lossy()
+    }
 }
 
 pub struct ModMetadata {
@@ -55,6 +67,17 @@ lazy_static! {
             .map(|s| s.into())
             .collect::<Vec<_>>()
     };
+}
+
+pub fn extension_is_supported(path: &Path) -> bool {
+    if let Some(ext) = path.extension() {
+        let ext_lower = ext.to_ascii_lowercase();
+        SUPPORTED_EXTENSIONS_OSSTR
+            .iter()
+            .any(|sup_ext| ext_lower == *sup_ext)
+    } else {
+        false
+    }
 }
 
 pub struct PlayList {
@@ -163,7 +186,7 @@ pub fn load_from_path(root_path: &str, items: &mut Vec<PlayListItem>) {
     if path.is_file() {
         load_from_file(root_path, path, &mut add_item);
     } else if path.is_dir() {
-        load_from_dir(path, &mut add_item);
+        load_from_dir(root_path, path, &mut add_item);
     } else {
         log::info!("{} is neither a file or a directory", root_path);
     }
@@ -172,35 +195,38 @@ pub fn load_from_path(root_path: &str, items: &mut Vec<PlayListItem>) {
 fn load_from_file<F: FnMut(ModPath)>(root_path: &str, path: &Path, f: &mut F) {
     debug_assert!(path.is_file()); // Really? What about TOC-TOU?
 
-    if path.ends_with(".zip") {
+    log::info!("Path: {:?}", path);
+    let is_archive = if let Some(extension) = path.extension() {
+        extension.to_ascii_lowercase() == "zip"
+    } else {
+        false
+    };
+
+    if is_archive {
         todo!("Load from zip");
     } else {
         f(ModPath {
             root_path: root_path.into(),
+            file_path: path.into(),
             archive_paths: vec![],
         });
     }
 }
 
-fn load_from_dir<F: FnMut(ModPath)>(path: &Path, f: &mut F) {
+fn load_from_dir<F: FnMut(ModPath)>(root_path: &str, path: &Path, f: &mut F) {
     debug_assert!(path.is_dir()); // Really? What about TOC-TOU?
 
     WalkDir::new(path)
         .into_iter()
         .filter_map(|r| r.ok())
         .for_each(|de| {
-            let path2 = de.path();
-            if let Some(ext) = path2.extension() {
-                let ext_lower = ext.to_ascii_lowercase();
-                if SUPPORTED_EXTENSIONS_OSSTR
-                    .iter()
-                    .any(|sup_ext| ext_lower == *sup_ext)
-                {
-                    f(ModPath {
-                        root_path: path2.into(),
-                        archive_paths: vec![],
-                    })
-                }
+            let file_path = de.path();
+            if extension_is_supported(file_path) {
+                f(ModPath {
+                    root_path: root_path.into(),
+                    file_path: file_path.into(),
+                    archive_paths: vec![],
+                })
             }
         })
 }

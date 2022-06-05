@@ -30,7 +30,7 @@ use tui::{
     style::{Color, Modifier, Style},
     terminal::Frame,
     text::{Span, Spans},
-    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table},
+    widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Table, Wrap},
 };
 
 use anyhow::Result;
@@ -254,7 +254,7 @@ fn render_playlist(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState
         let titles = playlist
             .items
             .iter()
-            .map(|item| item.mod_path.root_path.to_string_lossy().to_string())
+            .map(|item| item.mod_path.display_name().to_string())
             .collect::<Vec<_>>();
         let now_playing = playlist.now_playing;
         (titles, now_playing)
@@ -318,6 +318,6 @@ fn render_log(f: &mut Frame<impl Backend>, area: Rect, _app_state: &AppState) {
         .collect::<Vec<_>>();
 
     let block = Block::default().title("Log").borders(Borders::ALL);
-    let paragraph = Paragraph::new(text).block(block);
+    let paragraph = Paragraph::new(text).wrap(Wrap { trim: true }).block(block);
     f.render_widget(paragraph, area);
 }
