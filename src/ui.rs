@@ -254,7 +254,7 @@ fn render_playlist(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState
         let titles = playlist
             .items
             .iter()
-            .map(|item| item.mod_path.display_name().to_string())
+            .map(|item| item.mod_path.display_name())
             .collect::<Vec<_>>();
         let now_playing = playlist.now_playing;
         (titles, now_playing)

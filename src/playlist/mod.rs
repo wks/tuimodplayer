@@ -14,9 +14,9 @@
 use lazy_static::lazy_static;
 use openmpt::module::Module;
 use std::{
-    borrow::Cow,
     ffi::OsString,
     fs::File,
+    io::{Cursor, Read, Seek},
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -30,6 +30,7 @@ use crate::{
     util::{add_modulo_unsigned, sub_modulo_unsigned},
 };
 
+#[derive(Clone)]
 pub struct ModPath {
     pub root_path: OsString,
     pub file_path: OsString,
@@ -37,12 +38,26 @@ pub struct ModPath {
 }
 
 impl ModPath {
-    pub fn display_name(&self) -> Cow<'_, str> {
-        let file_path = Path::new(&self.file_path);
-        file_path
-            .file_name()
-            .unwrap_or(self.file_path.as_os_str())
-            .to_string_lossy()
+    pub fn display_name(&self) -> String {
+        if self.archive_paths.is_empty() {
+            let file_path = Path::new(&self.file_path);
+            file_path
+                .file_name()
+                .unwrap_or(self.file_path.as_os_str())
+                .to_string_lossy()
+                .into()
+        } else {
+            self.archive_paths.last().unwrap().into()
+        }
+    }
+
+    pub fn display_full_name(&self) -> String {
+        let file_path = self.file_path.to_string_lossy();
+        if self.archive_paths.is_empty() {
+            file_path.to_string()
+        } else {
+            format!("{}:{}", file_path, self.archive_paths.join(":"))
+        }
     }
 }
 
@@ -71,8 +86,8 @@ lazy_static! {
     };
 }
 
-pub fn extension_is_supported(path: &Path) -> bool {
-    if let Some(ext) = path.extension() {
+pub fn extension_is_supported(path: impl AsRef<Path>) -> bool {
+    if let Some(ext) = path.as_ref().extension() {
         let ext_lower = ext.to_ascii_lowercase();
         SUPPORTED_EXTENSIONS_OSSTR
             .iter()
@@ -82,8 +97,8 @@ pub fn extension_is_supported(path: &Path) -> bool {
     }
 }
 
-pub fn extension_is_archive(path: &Path) -> bool {
-    if let Some(ext) = path.extension() {
+pub fn extension_is_archive(path: impl AsRef<Path>) -> bool {
+    if let Some(ext) = path.as_ref().extension() {
         let ext_lower = ext.to_ascii_lowercase();
         ext_lower == "zip"
     } else {
@@ -107,7 +122,13 @@ impl PlayList {
     }
 
     pub fn load_from_path(&mut self, root_path: &str) {
-        load_from_path(root_path, &mut self.items);
+        RecursiveModuleLoader::new(|mod_path| {
+            self.items.push(PlayListItem {
+                mod_path,
+                metadata: None,
+            })
+        })
+        .load_from_root_path(Path::new(root_path));
     }
 
     pub fn poll_module(&mut self) -> Option<Module> {
@@ -184,93 +205,142 @@ impl PlayList {
     }
 }
 
-pub fn load_from_path(root_path: &str, items: &mut Vec<PlayListItem>) {
-    let path = Path::new(&root_path);
-
-    let mut add_item = |mod_path: ModPath| {
-        items.push(PlayListItem {
-            mod_path,
-            metadata: None,
-        });
-    };
-
-    if path.is_file() {
-        load_from_file(root_path, path, &mut add_item);
-    } else if path.is_dir() {
-        load_from_dir(root_path, path, &mut add_item);
-    } else {
-        log::info!("{} is neither a file or a directory", root_path);
-    }
+struct RecursiveModuleLoader<F: FnMut(ModPath)> {
+    sink: F,
 }
 
-fn load_from_file<F: FnMut(ModPath)>(root_path: &str, path: &Path, f: &mut F) {
-    debug_assert!(path.is_file()); // Really? What about TOC-TOU?
-
-    log::info!("Path: {:?}", path);
-    let is_archive = if let Some(extension) = path.extension() {
-        extension.to_ascii_lowercase() == "zip"
-    } else {
-        false
-    };
-
-    if is_archive {
-        load_from_archive(root_path, path, f);
-    } else {
-        f(ModPath {
-            root_path: root_path.into(),
-            file_path: path.into(),
-            archive_paths: vec![],
-        });
+impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
+    pub fn new(sink: F) -> Self {
+        Self { sink }
     }
-}
 
-fn load_from_dir<F: FnMut(ModPath)>(root_path: &str, path: &Path, f: &mut F) {
-    debug_assert!(path.is_dir()); // Really? What about TOC-TOU?
+    pub fn load_from_root_path(&mut self, root_path: &Path) {
+        if root_path.is_file() {
+            self.load_from_file(root_path, root_path);
+        } else if root_path.is_dir() {
+            self.load_from_dir(root_path, root_path);
+        } else {
+            log::info!("{:?} is neither a file or a directory", root_path);
+        }
+    }
 
-    WalkDir::new(path)
-        .into_iter()
-        .filter_map(|r| r.ok())
-        .for_each(|de| {
-            let file_path = de.path();
-            if extension_is_supported(file_path) {
-                f(ModPath {
-                    root_path: root_path.into(),
-                    file_path: file_path.into(),
-                    archive_paths: vec![],
-                })
-            }
+    pub fn load_from_file(&mut self, root_path: &Path, path: &Path) {
+        debug_assert!(path.is_file()); // Really? What about TOC-TOU?
+
+        log::info!("Path: {:?}", path);
+
+        if extension_is_archive(path) {
+            self.load_from_fs_archive_file(root_path, path);
+        } else {
+            (self.sink)(ModPath {
+                root_path: root_path.into(),
+                file_path: path.into(),
+                archive_paths: vec![],
+            });
+        }
+    }
+
+    pub fn load_from_fs_archive_file(&mut self, root_path: &Path, path: &Path) {
+        open_archive_file(path, |file| {
+            let template = ModPath {
+                root_path: root_path.into(),
+                file_path: path.into(),
+                archive_paths: Vec::new(),
+            };
+            self.load_from_archive(template, file);
         })
-}
+    }
 
-fn for_each_file_in_archive<F: FnMut(ZipFile<'_>)>(path: &Path, mut f: F) {
-    match File::open(path) {
-        Ok(file) => match zip::ZipArchive::new(file) {
+    pub fn load_from_archive(&mut self, template: ModPath, file: impl Read + Seek) {
+        match zip::ZipArchive::new(file) {
             Ok(ref mut zip) => {
                 for i in 0..zip.len() {
                     match zip.by_index(i) {
-                        Ok(zip_file) => f(zip_file),
+                        Ok(zip_file) => {
+                            self.load_from_file_in_archive(&template, zip_file);
+                        }
                         Err(e) => {
-                            log::debug!("Skip invalid zip: {:?} Error: {}", path, e);
+                            log::debug!(
+                                "Skip zip entry: {}:{} Error: {}",
+                                template.display_full_name(),
+                                i,
+                                e
+                            );
                         }
                     }
                 }
             }
             Err(e) => {
-                log::debug!("Skip invalid zip: {:?} Error: {}", path, e);
+                log::debug!(
+                    "Skip invalid zip: {} Error: {}",
+                    template.display_full_name(),
+                    e
+                );
             }
-        },
+        }
+    }
+
+    pub fn load_from_file_in_archive(&mut self, template: &ModPath, mut zip_file: ZipFile) {
+        let name = zip_file.name().to_string();
+        if extension_is_supported(&name) {
+            let mut mod_path = template.clone();
+            mod_path.archive_paths.push(name);
+            (self.sink)(mod_path);
+        } else if extension_is_archive(&name) {
+            let mut sub_template = template.clone();
+            sub_template.archive_paths.push(name.clone());
+            let mut content = Vec::new();
+            match zip_file.read_to_end(&mut content) {
+                Ok(_) => {
+                    let cursor = Cursor::new(content);
+                    self.load_from_archive(sub_template, cursor);
+                }
+                Err(e) => {
+                    log::debug!(
+                        "Cannot open inner archive {}:{} Error: {}",
+                        template.display_full_name(),
+                        name,
+                        e
+                    );
+                }
+            }
+        } else {
+            log::debug!(
+                "Unrecognised zip content: {}:{}",
+                template.display_full_name(),
+                name
+            );
+        }
+    }
+
+    pub fn load_from_dir(&mut self, root_path: &Path, dir_path: &Path) {
+        debug_assert!(dir_path.is_dir()); // Really? What about TOC-TOU?
+
+        WalkDir::new(dir_path)
+            .into_iter()
+            .filter_map(|r| r.ok())
+            .for_each(|de| {
+                let file_path = de.path();
+                if extension_is_supported(file_path) {
+                    (self.sink)(ModPath {
+                        root_path: root_path.into(),
+                        file_path: file_path.into(),
+                        archive_paths: vec![],
+                    })
+                } else if extension_is_archive(file_path) {
+                    self.load_from_fs_archive_file(root_path, file_path)
+                }
+            })
+    }
+}
+
+fn open_archive_file<F: FnMut(File)>(path: &Path, mut f: F) {
+    match File::open(path) {
+        Ok(file) => f(file),
         Err(e) => {
             log::debug!("Skip unopenable file: {:?} Error: {}", path, e);
         }
     }
-}
-
-fn load_from_archive<F: FnMut(ModPath)>(_root_path: &str, path: &Path, _f: &mut F) {
-    debug_assert!(extension_is_archive(path), "{:?} is not archive", path);
-
-    for_each_file_in_archive(path, |zip_file| {
-        log::info!("I see file: {}", zip_file.name());
-    });
 }
 
 pub struct PlayListModuleProvider {

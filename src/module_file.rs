@@ -11,11 +11,15 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::fs::File;
+use std::{
+    fs::File,
+    io::{Cursor, Read, Seek},
+};
 
 use openmpt::module::{stream::ModuleStream, Logger, Module};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Context, Result};
+use zip::ZipArchive;
 
 use crate::{control::ModuleControl, playlist::ModPath};
 
@@ -33,27 +37,6 @@ fn open_module(mut stream: impl ModuleStream) -> Result<Module, ModuleCreationEr
     Module::create(&mut stream, Logger::None, &[]).map_err(|_| ModuleCreationError)
 }
 
-pub fn open_module_file(file_path: String) -> Result<Module> {
-    let file = File::open(&file_path)?;
-
-    let module = if file_path.ends_with(".zip") {
-        let mut zip = zip::ZipArchive::new(file)?;
-
-        if zip.len() != 1 {
-            return Err(anyhow!("This zip archive has more than one file inside."));
-        }
-
-        let inner_file = zip.by_index(0)?;
-        log::info!("Using {} from zip file {}", inner_file.name(), file_path);
-        open_module(inner_file)
-    } else {
-        log::info!("Using file {} directly", file_path);
-        open_module(file)
-    }?;
-
-    Ok(module)
-}
-
 pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
     let file = File::open(&mod_path.file_path)?;
 
@@ -64,8 +47,28 @@ pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
         );
         Ok(open_module(file)?)
     } else {
-        todo!("Open from nested archives")
+        let mut content = read_file_from_archive(file, &mod_path.archive_paths[0])?;
+
+        for archive_path in mod_path.archive_paths[1..].iter() {
+            let cursor = Cursor::new(content);
+            content =
+                read_file_from_archive(cursor, archive_path).context("Opening inner archive")?;
+        }
+
+        let cursor = Cursor::new(content);
+        Ok(open_module(cursor)?)
     }
+}
+
+pub fn read_file_from_archive(archive: impl Read + Seek, archive_path: &str) -> Result<Vec<u8>> {
+    let mut zip = ZipArchive::new(archive)?;
+    let mut zip_file = zip.by_name(archive_path)?;
+    let zip_file_size = zip_file.size();
+    let size = usize::try_from(zip_file_size)
+        .map_err(|_| anyhow::anyhow!("File too large: {}", zip_file_size))?;
+    let mut content = Vec::with_capacity(size);
+    zip_file.read_to_end(&mut content)?;
+    Ok(content)
 }
 
 pub fn apply_mod_settings(module: &mut Module, control: &ModuleControl) {
