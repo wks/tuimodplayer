@@ -11,12 +11,13 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
+use anyhow::Result;
 use lazy_static::lazy_static;
 use openmpt::module::Module;
 use std::{
     ffi::OsString,
     fs::File,
-    io::{Cursor, Read, Seek},
+    io::{BufReader, Cursor, Read, Seek},
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -122,13 +123,17 @@ impl PlayList {
     }
 
     pub fn load_from_path(&mut self, root_path: &str) {
-        RecursiveModuleLoader::new(|mod_path| {
+        let mut loader = RecursiveModuleLoader::new(|mod_path| {
             self.items.push(PlayListItem {
                 mod_path,
                 metadata: None,
             })
-        })
-        .load_from_root_path(Path::new(root_path));
+        });
+
+        let time1 = std::time::Instant::now();
+        loader.load_from_root_path(Path::new(root_path));
+        let duration = time1.elapsed();
+        log::debug!("It took {}ms to open {}", duration.as_millis(), root_path);
     }
 
     pub fn poll_module(&mut self) -> Option<Module> {
@@ -241,14 +246,19 @@ impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
     }
 
     pub fn load_from_fs_archive_file(&mut self, root_path: &Path, path: &Path) {
-        open_archive_file(path, |file| {
-            let template = ModPath {
-                root_path: root_path.into(),
-                file_path: path.into(),
-                archive_paths: Vec::new(),
-            };
-            self.load_from_archive(template, file);
-        })
+        match buf_open(path) {
+            Ok(buf_reader) => {
+                let template = ModPath {
+                    root_path: root_path.into(),
+                    file_path: path.into(),
+                    archive_paths: Vec::new(),
+                };
+                self.load_from_archive(template, buf_reader);
+            }
+            Err(e) => {
+                log::debug!("Skip unopenable archive file: {:?} Error: {}", path, e);
+            }
+        }
     }
 
     pub fn load_from_archive(&mut self, template: ModPath, file: impl Read + Seek) {
@@ -334,13 +344,10 @@ impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
     }
 }
 
-fn open_archive_file<F: FnMut(File)>(path: &Path, mut f: F) {
-    match File::open(path) {
-        Ok(file) => f(file),
-        Err(e) => {
-            log::debug!("Skip unopenable file: {:?} Error: {}", path, e);
-        }
-    }
+fn buf_open(path: &Path) -> Result<BufReader<File>> {
+    let file = File::open(path)?;
+    let buf_reader = BufReader::new(file);
+    Ok(buf_reader)
 }
 
 pub struct PlayListModuleProvider {
