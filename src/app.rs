@@ -145,7 +145,7 @@ pub fn run(options: Options) -> Result<()> {
     let mut playlist = PlayList::new();
 
     for path in options.paths.iter() {
-        playlist.load_from_path(path);
+        crate::playlist::load_from_path(&mut playlist, path);
     }
 
     let playlist = Arc::new(Mutex::new(playlist));
