@@ -13,12 +13,12 @@
 
 use std::sync::Arc;
 
-use atomic::Atomic;
 use openmpt::module::{metadata::MetadataKey, Module};
+use seqlock::SeqLock;
 
 pub struct PlayState {
     pub module_info: ModuleInfo,
-    pub moment_state: Arc<MomentState>,
+    pub moment_state: Arc<SeqLock<MomentState>>,
 }
 
 #[derive(Clone)]
@@ -58,17 +58,8 @@ impl ModuleInfo {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct MomentState {
-    pub version: Atomic<usize>,
-    pub order: Atomic<usize>,
-    pub pattern: Atomic<usize>,
-    pub row: Atomic<usize>,
-    pub speed: Atomic<usize>,
-    pub tempo: Atomic<usize>,
-}
-
-pub struct MomentStateCopy {
     pub order: usize,
     pub pattern: usize,
     pub row: usize,
@@ -77,51 +68,13 @@ pub struct MomentStateCopy {
 }
 
 impl MomentState {
-    fn store<T, U>(field: &Atomic<T>, value: U)
-    where
-        T: 'static + Copy,
-        U: Copy + num_traits::AsPrimitive<T>,
-    {
-        field.store(value.as_(), atomic::Ordering::Relaxed);
-    }
-
-    fn load<T>(field: &Atomic<T>) -> T
-    where
-        T: 'static + Copy,
-    {
-        field.load(atomic::Ordering::Relaxed)
-    }
-
-    pub fn update_from_module(&self, module: &mut Module) {
-        self.version.fetch_add(1, atomic::Ordering::SeqCst);
-        Self::store(&self.order, module.get_current_order());
-        Self::store(&self.pattern, module.get_current_pattern());
-        Self::store(&self.row, module.get_current_row());
-        Self::store(&self.speed, module.get_current_speed());
-        Self::store(&self.tempo, module.get_current_tempo());
-        self.version.fetch_add(1, atomic::Ordering::SeqCst);
-    }
-
-    pub fn load_atomic(&self) -> MomentStateCopy {
-        loop {
-            let version1 = self.version.load(atomic::Ordering::SeqCst);
-            if version1 % 2 == 1 {
-                continue;
-            }
-            let result = MomentStateCopy {
-                order: Self::load(&self.order),
-                pattern: Self::load(&self.pattern),
-                row: Self::load(&self.row),
-                speed: Self::load(&self.speed),
-                tempo: Self::load(&self.tempo),
-            };
-            let version2 = self.version.load(atomic::Ordering::SeqCst);
-
-            if version2 != version1 {
-                continue;
-            }
-
-            break result;
+    pub fn from_module(module: &mut Module) -> Self {
+        Self {
+            order: module.get_current_order() as _,
+            pattern: module.get_current_pattern() as _,
+            row: module.get_current_row() as _,
+            speed: module.get_current_speed() as _,
+            tempo: module.get_current_tempo() as _,
         }
     }
 }

@@ -15,7 +15,7 @@ use std::{io::stdout, panic::PanicInfo, time::Duration};
 
 use crate::{
     app::AppState,
-    player::{ModuleInfo, MomentStateCopy},
+    player::{ModuleInfo, MomentState},
     util::LayoutSplitN,
 };
 
@@ -191,13 +191,13 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
             message: _,
         } = play_state.module_info.clone();
 
-        let MomentStateCopy {
+        let MomentState {
             order,
             pattern,
             row,
             speed,
             tempo,
-        } = play_state.moment_state.load_atomic();
+        } = play_state.moment_state.read();
 
         let sample_rate = app_state.options.sample_rate;
 

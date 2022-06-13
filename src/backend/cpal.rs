@@ -18,6 +18,7 @@ use cpal::{
     Device, Host, Stream,
 };
 use openmpt::module::Module;
+use seqlock::SeqLock;
 
 use crate::{
     control::ModuleControl,
@@ -45,7 +46,7 @@ enum CurrentModuleState {
     NotLoaded,
     Loaded {
         module: Module,
-        moment_state: Arc<MomentState>,
+        moment_state: Arc<SeqLock<MomentState>>,
     },
     Exhausted,
 }
@@ -112,7 +113,11 @@ impl CpalBackendPrivate {
                         buf_time,
                     );
                     if actual_read_frames > 0 {
-                        moment_state.update_from_module(module);
+                        let new_moment_state = MomentState::from_module(module);
+                        {
+                            let mut moment_state = moment_state.lock_write();
+                            *moment_state = new_moment_state;
+                        }
                         break actual_read_bytes;
                     } else {
                         self.module = CurrentModuleState::NotLoaded;
@@ -128,7 +133,7 @@ impl CpalBackendPrivate {
     fn reload(&mut self) {
         self.module = if let Some(mut module) = self.module_provider.poll_module() {
             apply_mod_settings(&mut module, &self.control);
-            let moment_state: Arc<MomentState> = Default::default();
+            let moment_state: Arc<SeqLock<MomentState>> = Default::default();
             let play_state = PlayState {
                 module_info: ModuleInfo::from_module(&mut module),
                 moment_state: moment_state.clone(),
