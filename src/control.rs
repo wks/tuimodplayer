@@ -133,6 +133,10 @@ impl<T: Num + Copy + FromPrimitive> ControlField<T> {
         self.value = self.value.saturating_sub(self.spec.step).max(self.spec.low);
     }
 
+    pub fn value(&self) -> i32 {
+        self.value
+    }
+
     pub fn output(&self) -> T {
         match self.spec.scale {
             ControlScale::Linear { factor, offset } => {
