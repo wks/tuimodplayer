@@ -132,6 +132,9 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
                     KeyCode::Char('0') => {
                         app_state.volume_ramping_up();
                     }
+                    KeyCode::Char('r') => {
+                        app_state.toggle_repeat();
+                    }
                     KeyCode::Char(' ') => {
                         app_state.pause_resume();
                     }
@@ -167,7 +170,7 @@ fn render_ui(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
 
     let [state, left_bottom] = Layout::default()
         .direction(Direction::Vertical)
-        .split_n(left, [Constraint::Length(15), Constraint::Min(1)]);
+        .split_n(left, [Constraint::Length(16), Constraint::Min(1)]);
 
     let [playlist, log] = Layout::default().direction(Direction::Horizontal).split_n(
         left_bottom,
@@ -207,6 +210,7 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
         let stereo_separation = app_state.control.stereo_separation.output();
         let filter_taps = app_state.control.filter_taps.output();
         let volume_ramping = app_state.control.volume_ramping.output();
+        let repeat = app_state.control.repeat;
 
         let mut max_key_len = 0;
         let mut rows = vec![];
@@ -234,6 +238,7 @@ fn render_state(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
         add_row("Stereo separation", format!("{}", stereo_separation));
         add_row("Filter taps", format!("{}", filter_taps));
         add_row("Volume ramping", format!("{}", volume_ramping));
+        add_row("Repeat", repeat.to_string());
 
         let table_layout = [
             Constraint::Length(max_key_len as u16),

@@ -78,4 +78,5 @@ pub fn apply_mod_settings(module: &mut Module, control: &ModuleControl) {
     module.set_render_stereo_separation(control.stereo_separation.output());
     module.set_render_interpolation_filter_length(control.filter_taps.output());
     module.set_render_volume_ramping(control.volume_ramping.output());
+    module.set_repeat_count(if control.repeat { -1 } else { 0 });
 }

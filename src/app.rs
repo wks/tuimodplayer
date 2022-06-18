@@ -139,6 +139,11 @@ impl AppState {
         self.control.volume_ramping.inc();
         self.send_apply_mod_settings_event();
     }
+
+    pub fn toggle_repeat(&mut self) {
+        self.control.repeat = !self.control.repeat;
+        self.send_apply_mod_settings_event();
+    }
 }
 
 pub fn run(options: Options) -> Result<()> {

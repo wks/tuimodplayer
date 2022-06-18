@@ -21,6 +21,7 @@ pub struct ModuleControl {
     pub stereo_separation: ControlField<i32>,
     pub filter_taps: ControlField<i32>,
     pub volume_ramping: ControlField<i32>,
+    pub repeat: bool,
 }
 
 impl Default for ModuleControl {
@@ -32,6 +33,7 @@ impl Default for ModuleControl {
             stereo_separation: ControlField::new(&controls::STEREO_SEPARATION),
             filter_taps: ControlField::new(&controls::FILTER_TAPS),
             volume_ramping: ControlField::new(&controls::VOLUME_RAMPING),
+            repeat: false,
         }
     }
 }
