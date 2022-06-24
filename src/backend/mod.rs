@@ -13,6 +13,8 @@
 
 mod cpal;
 
+use std::time::Duration;
+
 use openmpt::module::Module;
 
 use crate::{control::ModuleControl, player::PlayState};
@@ -39,10 +41,18 @@ impl ControlEvent {
     }
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct DecodeStatus {
+    pub buffer_size: usize,
+    pub decode_time: Duration,
+    pub cpu_util: f64,
+}
+
 pub trait Backend {
     fn start(&mut self);
     fn pause_resume(&mut self);
     fn reload(&mut self);
     fn poll_event(&mut self) -> Option<BackendEvent>;
     fn send_event(&mut self, event: ControlEvent);
+    fn read_decode_status(&self) -> DecodeStatus;
 }

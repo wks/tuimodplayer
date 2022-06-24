@@ -26,7 +26,7 @@ use crate::{
     player::{ModuleInfo, MomentState, PlayState},
 };
 
-use super::{Backend, BackendEvent, ControlEvent, ModuleProvider};
+use super::{Backend, BackendEvent, ControlEvent, DecodeStatus, ModuleProvider};
 
 pub struct CpalBackend {
     pub host: Host,
@@ -40,6 +40,7 @@ pub struct CpalBackend {
 
 struct CpalBackendShared {
     pub sample_rate: usize,
+    pub decode_status: SeqLock<DecodeStatus>,
 }
 
 enum CurrentModuleState {
@@ -101,17 +102,34 @@ impl CpalBackendPrivate {
                     let time1 = std::time::Instant::now();
                     let actual_read_frames =
                         module.read_interleaved_float_stereo(self.shared.sample_rate as i32, data);
-                    let time2 = std::time::Instant::now();
-                    let elapsed = (time2 - time1).as_micros();
-                    let buf_time = actual_read_frames * 1000 * 1000 / self.shared.sample_rate;
+                    let elapsed = time1.elapsed();
+                    let elapsed_micros = elapsed.as_micros();
+                    let buf_time_micros =
+                        actual_read_frames * 1000 * 1000 / self.shared.sample_rate;
                     let actual_read_bytes = actual_read_frames * 2;
-                    log::debug!(
-                        "data.len: {}, actual_read_bytes: {}, time: {} / {}",
+                    let cpu_util = if actual_read_frames == 0 {
+                        0f64
+                    } else {
+                        // Equal to elapsed_micros / buf_time_micros, but more precise.
+                        elapsed.as_nanos() as f64 * self.shared.sample_rate as f64
+                            / (actual_read_frames as f64 * 1_000_000_000_f64)
+                    };
+                    log::trace!(
+                        "buf: {}, read: {}, time: {}µs / {}µs, cpu: {}%",
                         data.len(),
                         actual_read_bytes,
-                        elapsed,
-                        buf_time,
+                        elapsed_micros,
+                        buf_time_micros,
+                        cpu_util * 100.0,
                     );
+                    {
+                        let mut decode_status = self.shared.decode_status.lock_write();
+                        *decode_status = DecodeStatus {
+                            buffer_size: data.len(),
+                            decode_time: elapsed,
+                            cpu_util,
+                        };
+                    }
                     if actual_read_frames > 0 {
                         let new_moment_state = MomentState::from_module(module);
                         {
@@ -193,7 +211,10 @@ impl CpalBackend {
         let config = config.with_sample_rate(cpal::SampleRate(sample_rate as u32));
         log::info!("Using output config: {:?}", config);
 
-        let shared = Arc::new(CpalBackendShared { sample_rate });
+        let shared = Arc::new(CpalBackendShared {
+            sample_rate,
+            decode_status: Default::default(),
+        });
 
         let (ctrl_sender, ctrl_receiver) = mpsc::channel();
         let (be_sender, be_receiver) = mpsc::channel();
@@ -260,5 +281,9 @@ impl Backend for CpalBackend {
 
     fn send_event(&mut self, event: super::ControlEvent) {
         self.sender.send(event).unwrap();
+    }
+
+    fn read_decode_status(&self) -> DecodeStatus {
+        self.shared.decode_status.read()
     }
 }

@@ -15,6 +15,7 @@ use std::{borrow::Cow, io::stdout, panic::PanicInfo, time::Duration};
 
 use crate::{
     app::AppState,
+    backend::DecodeStatus,
     player::{ModuleInfo, MomentState},
     util::LayoutSplitN,
 };
@@ -292,6 +293,12 @@ fn render_state(
         let volume_ramping = app_state.control.volume_ramping.output();
         let repeat = app_state.control.repeat;
 
+        let DecodeStatus {
+            buffer_size,
+            cpu_util,
+            ..
+        } = app_state.backend.read_decode_status();
+
         let title_line = LineBuilder::build(color_scheme, |b| {
             b.key("Title");
             b.space("   ");
@@ -320,8 +327,10 @@ fn render_state(
             b.kv("Pitch±", format!("{}/24", pitch_factor));
         });
 
-        let sample_rate_line = LineBuilder::build(color_scheme, |b| {
-            b.kv("Sample rate", format!("{}", sample_rate));
+        let decoding_line = LineBuilder::build(color_scheme, |b| {
+            b.kv("Sample Rate", format!("{}", sample_rate));
+            b.kv("Buffer Size", format!("{}", buffer_size));
+            b.kv("CPU", format!("{:.2}%", cpu_util * 100.0));
         });
 
         let text = Text {
@@ -330,7 +339,7 @@ fn render_state(
                 player_line,
                 speed_line,
                 control_line,
-                sample_rate_line,
+                decoding_line,
             ],
         };
 
