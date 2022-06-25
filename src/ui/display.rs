@@ -45,17 +45,6 @@ struct ColorScheme {
     list_highlight: Style,
 }
 
-trait ThemedUIBuilder {
-    fn color_scheme(&self) -> &ColorScheme;
-
-    fn new_block<'a, S: Into<Cow<'a, str>>>(&self, title: S) -> Block<'a> {
-        Block::default()
-            .style(self.color_scheme().normal)
-            .borders(Borders::ALL)
-            .title(Span::styled(title, self.color_scheme().block_title))
-    }
-}
-
 impl Default for ColorScheme {
     fn default() -> Self {
         Self {
@@ -75,46 +64,70 @@ impl Default for ColorScheme {
     }
 }
 
-struct LineBuilder<'a> {
-    spans: Vec<Span<'a>>,
-    color_scheme: &'a ColorScheme,
-}
+trait ThemedUIBuilder {
+    fn color_scheme(&self) -> &ColorScheme;
 
-impl<'a> LineBuilder<'a> {
-    pub fn new(color_scheme: &'a ColorScheme) -> LineBuilder<'a> {
-        Self {
-            spans: vec![],
-            color_scheme,
-        }
+    fn new_block<'t, S: Into<Cow<'t, str>>>(&self, title: S) -> Block<'t> {
+        Block::default()
+            .style(self.color_scheme().normal)
+            .borders(Borders::ALL)
+            .title(Span::styled(title, self.color_scheme().block_title))
     }
 
-    pub fn into_spans(self) -> Spans<'a> {
-        Spans(self.spans)
-    }
-
-    pub fn build<F: FnOnce(&mut Self)>(color_scheme: &'a ColorScheme, f: F) -> Spans {
-        let mut builder = Self::new(color_scheme);
+    fn build_state_line<'b, 't, F: FnOnce(&mut LineBuilder<Self>)>(&'b self, f: F) -> Spans<'t> {
+        let mut builder = LineBuilder::new(self);
         f(&mut builder);
         builder.into_spans()
     }
 
-    pub fn span(&mut self, s: impl Into<Cow<'a, str>>, style: Style) {
-        self.spans.push(Span::styled(s, style));
+    fn new_span<'t, S: Into<Cow<'t, str>>>(&self, text: S, style: Style) -> Span<'t> {
+        Span::styled(text, style)
     }
 
-    pub fn key(&mut self, s: impl Into<Cow<'a, str>>) {
-        self.span(s, self.color_scheme.key);
+    fn new_span_normal<'t, S: Into<Cow<'t, str>>>(&self, text: S) -> Span<'t> {
+        self.new_span(text, self.color_scheme().normal)
     }
 
-    pub fn value(&mut self, s: impl Into<Cow<'a, str>>) {
-        self.span(s, self.color_scheme.normal);
+    fn new_span_key<'t, S: Into<Cow<'t, str>>>(&self, text: S) -> Span<'t> {
+        self.new_span(text, self.color_scheme().key)
     }
 
-    pub fn space(&mut self, s: impl Into<Cow<'a, str>>) {
-        self.span(s, self.color_scheme.normal);
+    fn new_span_value<'t, S: Into<Cow<'t, str>>>(&self, text: S) -> Span<'t> {
+        self.new_span(text, self.color_scheme().normal)
+    }
+}
+
+struct LineBuilder<'t, 'b, B: ThemedUIBuilder + ?Sized> {
+    spans: Vec<Span<'t>>,
+    ui_builder: &'b B,
+}
+
+impl<'t, 'b, B: ThemedUIBuilder + ?Sized> LineBuilder<'t, 'b, B> {
+    pub fn new(ui_builder: &'b B) -> LineBuilder<'t, 'b, B> {
+        Self {
+            spans: vec![],
+            ui_builder,
+        }
     }
 
-    pub fn kv(&mut self, k: impl Into<Cow<'a, str>>, v: impl Into<Cow<'a, str>>) {
+    pub fn into_spans(self) -> Spans<'t> {
+        let spans = self.spans;
+        Spans(spans)
+    }
+
+    fn key(&mut self, s: impl Into<Cow<'t, str>>) {
+        self.spans.push(self.ui_builder.new_span_key(s));
+    }
+
+    fn value(&mut self, s: impl Into<Cow<'t, str>>) {
+        self.spans.push(self.ui_builder.new_span_value(s));
+    }
+
+    fn space(&mut self, s: impl Into<Cow<'t, str>>) {
+        self.spans.push(self.ui_builder.new_span_normal(s));
+    }
+
+    pub fn kv(&mut self, k: impl Into<Cow<'t, str>>, v: impl Into<Cow<'t, str>>) {
         self.key(k);
         self.space(" ");
         self.value(v);
@@ -185,7 +198,6 @@ where
         let block = self.new_block("State");
 
         let app_state = self.app_state;
-        let color_scheme = &self.color_scheme;
 
         if let Some(ref play_state) = app_state.play_state {
             let ModuleInfo {
@@ -219,13 +231,13 @@ where
                 ..
             } = app_state.backend.read_decode_status();
 
-            let title_line = LineBuilder::build(color_scheme, |b| {
+            let title_line = self.build_state_line(|b| {
                 b.key("Title");
                 b.space("   ");
                 b.value(title);
             });
 
-            let player_line = LineBuilder::build(color_scheme, |b| {
+            let player_line = self.build_state_line(|b| {
                 b.kv("Order", format!("{:02}/{:02}", order, n_orders));
                 b.kv("Pattern", format!("{:02}/{:02}", pattern, n_patterns));
                 b.kv("Row", format!("{:02}", row));
@@ -233,21 +245,21 @@ where
                 b.kv("Repeat", if repeat { "on" } else { "off" });
             });
 
-            let control_line = LineBuilder::build(color_scheme, |b| {
+            let control_line = self.build_state_line(|b| {
                 b.kv("Gain", format!("{} dB", gain / 100));
                 b.kv("Stereo", format!("{}%", stereo_separation));
                 b.kv("Filter", format!("{} taps", filter_taps));
                 b.kv("Ramping", format!("{}", volume_ramping));
             });
 
-            let speed_line = LineBuilder::build(color_scheme, |b| {
+            let speed_line = self.build_state_line(|b| {
                 b.kv("Speed", format!("{}", speed));
                 b.kv("Tempo", format!("{}", tempo));
                 b.kv("Tempo±", format!("{}/24", tempo_factor));
                 b.kv("Pitch±", format!("{}/24", pitch_factor));
             });
 
-            let decoding_line = LineBuilder::build(color_scheme, |b| {
+            let decoding_line = self.build_state_line(|b| {
                 b.kv("Sample Rate", format!("{}", sample_rate));
                 b.kv("Buffer Size", format!("{}", buffer_size));
                 b.kv("CPU", format!("{:.2}%", cpu_util * 100.0));
