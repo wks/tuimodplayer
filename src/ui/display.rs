@@ -48,7 +48,7 @@ struct ColorScheme {
 trait ThemedUIBuilder {
     fn color_scheme(&self) -> &ColorScheme;
 
-    fn new_block<'t>(&self, title: &'t str) -> Block<'t> {
+    fn new_block<'a, S: Into<Cow<'a, str>>>(&self, title: S) -> Block<'a> {
         Block::default()
             .style(self.color_scheme().normal)
             .borders(Borders::ALL)
@@ -182,7 +182,7 @@ where
     }
 
     fn render_state(&mut self, area: Rect) {
-        let block = Block::default().title("State").borders(Borders::ALL);
+        let block = self.new_block("State");
 
         let app_state = self.app_state;
         let color_scheme = &self.color_scheme;
@@ -300,9 +300,7 @@ where
             .unwrap_or_else(|| "-".to_string());
         let n_items = items.len();
 
-        let block = Block::default()
-            .title(format!("Playlist {}/{}", now_playing_text, n_items))
-            .borders(Borders::ALL);
+        let block = self.new_block(format!("Playlist {}/{}", now_playing_text, n_items));
 
         let items = List::new(items)
             .block(block)
@@ -329,7 +327,7 @@ where
             vec![Spans::from("(No module)")]
         };
 
-        let block = Block::default().title("Message").borders(Borders::ALL);
+        let block = self.new_block("Message");
         let paragraph = Paragraph::new(text).block(block);
         self.frame.render_widget(paragraph, area);
     }
@@ -340,7 +338,7 @@ where
             .map(|line| Spans::from(line.clone()))
             .collect::<Vec<_>>();
 
-        let block = Block::default().title("Log").borders(Borders::ALL);
+        let block = self.new_block("Log");
         let paragraph = Paragraph::new(text).wrap(Wrap { trim: true }).block(block);
         self.frame.render_widget(paragraph, area);
     }
