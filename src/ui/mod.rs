@@ -83,8 +83,9 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
             term.clear()?;
         }
 
-        term.draw(|f| {
-            render_ui(f, f.size(), app_state);
+        term.draw(|frame| {
+            let area = frame.size();
+            render_ui(frame, area, app_state);
         })?;
     }
 
