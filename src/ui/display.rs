@@ -11,18 +11,13 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::{borrow::Cow, io::stdout, panic::PanicInfo, time::Duration};
+use std::borrow::Cow;
 
 use crate::{
     app::AppState,
     backend::DecodeStatus,
     player::{ModuleInfo, MomentState},
     util::LayoutSplitN,
-};
-
-use crossterm::{
-    event::{self, KeyModifiers},
-    execute, terminal,
 };
 
 use tui::{
@@ -33,136 +28,6 @@ use tui::{
     text::{Span, Spans, Text},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
-
-use anyhow::Result;
-
-static mut OLD_HOOK: Option<Box<dyn Fn(&PanicInfo) + Sync + Send>> = None;
-static REGISTER_PANIC_HOOK: std::sync::Once = std::sync::Once::new();
-
-fn ui_panic_hook(panic_info: &PanicInfo<'_>) {
-    execute!(stdout(), terminal::LeaveAlternateScreen).unwrap_or_else(|e| {
-        // Cannot handle error while handling panic.  Printing is the best effort.
-        eprintln!("Failed to leave alternative screen: {}", e);
-    });
-    crate::logging::set_stderr_enabled(true);
-    terminal::disable_raw_mode().unwrap_or_else(|e| {
-        // Cannot handle error while handling panic.  Printing is the best effort.
-        eprintln!("Failed to disable raw mode: {}", e);
-    });
-    let old_hook = unsafe { OLD_HOOK.as_ref().unwrap() };
-    old_hook(panic_info);
-}
-
-pub fn run_ui(app_state: &mut AppState) -> Result<()> {
-    REGISTER_PANIC_HOOK.call_once(|| {
-        unsafe {
-            OLD_HOOK = Some(std::panic::take_hook());
-        }
-        std::panic::set_hook(Box::new(ui_panic_hook));
-    });
-
-    terminal::enable_raw_mode()?;
-
-    crate::logging::set_stderr_enabled(false);
-    execute!(stdout(), terminal::EnterAlternateScreen)?;
-
-    let backend = tui::backend::CrosstermBackend::new(stdout());
-    let mut term = tui::Terminal::new(backend)?;
-
-    loop {
-        let mut redraw = false;
-
-        if event::poll(Duration::from_millis(100))? {
-            let ev = event::read()?;
-            use event::{Event, KeyCode, KeyEvent};
-            #[allow(clippy::single_match)] // Will add more event handling in the future
-            #[allow(clippy::collapsible_match)]
-            match ev {
-                Event::Key(KeyEvent { code, modifiers }) => match code {
-                    KeyCode::Char('l') if modifiers.contains(KeyModifiers::CONTROL) => {
-                        redraw = true;
-                    }
-                    KeyCode::Char('q') => {
-                        break;
-                    }
-                    KeyCode::Char('m') => {
-                        app_state.next();
-                    }
-                    KeyCode::Char('n') => {
-                        app_state.prev();
-                    }
-                    KeyCode::Char('M') => {
-                        app_state.next10();
-                    }
-                    KeyCode::Char('N') => {
-                        app_state.prev10();
-                    }
-                    KeyCode::Char('u') => {
-                        app_state.tempo_down();
-                    }
-                    KeyCode::Char('i') => {
-                        app_state.tempo_up();
-                    }
-                    KeyCode::Char('o') => {
-                        app_state.pitch_down();
-                    }
-                    KeyCode::Char('p') => {
-                        app_state.pitch_up();
-                    }
-                    KeyCode::Char('3') => {
-                        app_state.gain_down();
-                    }
-                    KeyCode::Char('4') => {
-                        app_state.gain_up();
-                    }
-                    KeyCode::Char('5') => {
-                        app_state.stereo_separation_down();
-                    }
-                    KeyCode::Char('6') => {
-                        app_state.stereo_separation_up();
-                    }
-                    KeyCode::Char('7') => {
-                        app_state.filter_taps_down();
-                    }
-                    KeyCode::Char('8') => {
-                        app_state.filter_taps_up();
-                    }
-                    KeyCode::Char('9') => {
-                        app_state.volume_ramping_down();
-                    }
-                    KeyCode::Char('0') => {
-                        app_state.volume_ramping_up();
-                    }
-                    KeyCode::Char('r') => {
-                        app_state.toggle_repeat();
-                    }
-                    KeyCode::Char(' ') => {
-                        app_state.pause_resume();
-                    }
-                    _ => {}
-                },
-                _ => {}
-            }
-        }
-
-        app_state.handle_backend_events();
-
-        if std::mem::take(&mut redraw) {
-            term.clear()?;
-        }
-
-        term.draw(|f| {
-            render_ui(f, f.size(), app_state);
-        })?;
-    }
-
-    execute!(stdout(), terminal::LeaveAlternateScreen)?;
-    crate::logging::set_stderr_enabled(true);
-
-    terminal::disable_raw_mode()?;
-
-    Ok(())
-}
 
 struct ColorScheme {
     normal: Style,
@@ -237,7 +102,7 @@ impl<'a> LineBuilder<'a> {
     }
 }
 
-fn render_ui(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
+pub fn render_ui(f: &mut Frame<impl Backend>, area: Rect, app_state: &AppState) {
     let [left, message] = Layout::default()
         .direction(Direction::Horizontal)
         .split_n(area, [Constraint::Min(10), Constraint::Length(24)]);
