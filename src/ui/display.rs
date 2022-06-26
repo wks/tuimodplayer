@@ -189,7 +189,7 @@ where
     pub fn render_ui(&mut self, area: Rect) {
         let [left, message] = Layout::default()
             .direction(Direction::Horizontal)
-            .split_n(area, [Constraint::Min(10), Constraint::Length(24)]);
+            .split_n(area, [Constraint::Min(10), Constraint::Length(27)]);
 
         let [state, left_bottom] = Layout::default()
             .direction(Direction::Vertical)
