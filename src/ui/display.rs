@@ -95,6 +95,18 @@ trait ThemedUIBuilder {
     fn new_span_value<'t, S: Into<Cow<'t, str>>>(&self, text: S) -> Span<'t> {
         self.new_span(text, self.color_scheme().normal)
     }
+
+    fn new_paragraph_from_raw_lines<'t, S: Into<Cow<'t, str>>>(
+        &self,
+        lines: Vec<S>,
+    ) -> Paragraph<'t> {
+        let spanses: Vec<Spans> = lines
+            .into_iter()
+            .map(|line| Spans::from(Span::raw(line)))
+            .collect();
+        let text = Text::from(spanses);
+        Paragraph::new(text).style(self.color_scheme().normal)
+    }
 }
 
 struct LineBuilder<'t, 'b, B: ThemedUIBuilder + ?Sized> {
@@ -303,7 +315,7 @@ where
             .cloned()
             .map(|line| {
                 let span = Spans::from(line);
-                ListItem::new(span).style(Style::default().fg(Color::White).bg(Color::Black))
+                ListItem::new(span).style(color_scheme.normal)
             })
             .collect();
 
@@ -328,30 +340,30 @@ where
 
     fn render_message(&mut self, area: Rect) {
         let app_state = self.app_state;
-        let text = if let Some(ref play_state) = app_state.play_state {
+        let lines: Vec<Cow<str>> = if let Some(ref play_state) = app_state.play_state {
             play_state
                 .module_info
                 .message
                 .iter()
-                .map(|line| Spans::from(line.clone()))
+                .map(|s| Cow::<str>::Borrowed(s))
                 .collect::<Vec<_>>()
         } else {
-            vec![Spans::from("(No module)")]
+            vec![Cow::Borrowed("(No module)")]
         };
 
         let block = self.new_block("Message");
-        let paragraph = Paragraph::new(text).block(block);
+        let paragraph = self.new_paragraph_from_raw_lines(lines).block(block);
         self.frame.render_widget(paragraph, area);
     }
 
     fn render_log(&mut self, area: Rect) {
-        let text = crate::logging::last_n_records(area.height as usize)
-            .iter()
-            .map(|line| Spans::from(line.clone()))
-            .collect::<Vec<_>>();
+        let text = crate::logging::last_n_records(area.height as usize);
 
         let block = self.new_block("Log");
-        let paragraph = Paragraph::new(text).wrap(Wrap { trim: true }).block(block);
+        let paragraph = self
+            .new_paragraph_from_raw_lines(text)
+            .wrap(Wrap { trim: true })
+            .block(block);
         self.frame.render_widget(paragraph, area);
     }
 }
