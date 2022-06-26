@@ -1,19 +1,68 @@
 # TUI Mod Player
 
+*Q: What would I do if I [downloaded][ModArchive-BT] the entire [ModArchive] and
+don't know what to do with the 100000+ mod files I have?*
+
+*A: You play them with [TUIModPlayer].*
+
 TUIModPlayer is a [module music (a.k.a. mod)][mod] player with a [text-based
 user interface (TUI)][tui-wiki] written in [Rust].
 
 As the name suggests, it uses the [tui-rs] library to build the UI.
 
-It uses [libopenmpt] to decode mods.  It can play whatever format libopenmpt
-supports, including but not limited to `.mod`, `.xm`, `.s3m`, `.it`, `.mptm` and
-so on.
+It uses [libopenmpt] to decode mods.  It
+can play whatever format libopenmpt supports, including but not limited to
+`.mod`, `.xm`, `.s3m`, `.it`, `.mptm` and so on.
 
-[mod]: https://modarchive.org/index.php?article-modules
-[tui-wiki]: https://en.wikipedia.org/wiki/Text-based_user_interface
-[tui-rs]: https://crates.io/crates/tui
 [libopenmpt]: https://lib.openmpt.org/libopenmpt/
+[ModArchive-BT]: http://tracker.modarchive.org/
+[ModArchive]: https://modarchive.org/
+[mod]: https://modarchive.org/index.php?article-modules
 [Rust]: https://www.rust-lang.org/
+[TUIModPlayer]: https://github.com/wks/tuimodplayer
+[tui-rs]: https://crates.io/crates/tui
+[tui-wiki]: https://en.wikipedia.org/wiki/Text-based_user_interface
+
+# How to Use?
+
+## Download, Compile and Run
+
+You may need to install libopenmpt using your favourite package managers, for
+example:
+
+```sh
+sudo pacman -S libopenmpt
+```
+
+Then clone this repo and build/run.
+
+```sh
+git clone https://github.com/wks/tuimodplayer.git
+cd tuimodplayer
+cargo run --release -- /path/to/modarchive_2007_official_snapshot_120000_modules
+```
+
+## Key Bindings
+
+List available key bindings:
+
+```sh
+openmpt123 --help-keyboard
+```
+
+Yes.  This is intentional.  I don't want to surprise those who are used to
+openmpt123.  But there are more:
+
+-   `r`: Toggle repeating.  When on, it will repeat the same mod.
+-   `ctrl+L`: Redraw screen.
+
+# Author
+
+Kunshan Wang \<d2tzMTk4NkBnbWFpbC5jb20K\>
+
+# License
+
+GPLv3
 
 <!--
 vim: tw=80
