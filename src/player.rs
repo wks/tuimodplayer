@@ -16,6 +16,8 @@ use std::sync::Arc;
 use openmpt::module::{metadata::MetadataKey, Module};
 use seqlock::SeqLock;
 
+use crate::util::screen_width;
+
 pub struct PlayState {
     pub module_info: ModuleInfo,
     pub moment_state: Arc<SeqLock<MomentState>>,
@@ -27,6 +29,7 @@ pub struct ModuleInfo {
     pub n_orders: usize,
     pub n_patterns: usize,
     pub message: Vec<String>,
+    pub message_width: usize,
 }
 
 impl ModuleInfo {
@@ -49,11 +52,13 @@ impl ModuleInfo {
                     .collect::<Vec<_>>()
             }
         };
+        let message_width = message.iter().map(|s| screen_width(s)).max().unwrap_or(0);
         Self {
             title,
             n_orders,
             n_patterns,
             message,
+            message_width,
         }
     }
 }

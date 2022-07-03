@@ -98,3 +98,11 @@ pub fn center_region(list_len: usize, window_len: usize, selected: usize) -> usi
 
     result
 }
+
+/// Return the width of a string when printed on the screen.
+/// Currently we just use the number of characters
+/// because mod files may not (really?) contain full-width characters,
+/// such as Chinese characters, which occupy the width of two letters.
+pub fn screen_width(s: &str) -> usize {
+    s.chars().count()
+}

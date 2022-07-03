@@ -186,10 +186,28 @@ where
         }
     }
 
+    const MAX_MOD_SAMPLE_NAME_LEN: usize = 22;
+
     pub fn render_ui(&mut self, area: Rect) {
-        let [left, message] = Layout::default()
-            .direction(Direction::Horizontal)
-            .split_n(area, [Constraint::Min(10), Constraint::Length(27)]);
+        let maybe_message_width = self
+            .app_state
+            .play_state
+            .as_ref()
+            .map(|ps| ps.module_info.message_width);
+
+        let message_window_width = maybe_message_width
+            .iter()
+            .cloned()
+            .fold(Self::MAX_MOD_SAMPLE_NAME_LEN, usize::max)
+            + 2;
+
+        let [left, message] = Layout::default().direction(Direction::Horizontal).split_n(
+            area,
+            [
+                Constraint::Min(10),
+                Constraint::Length(message_window_width as u16),
+            ],
+        );
 
         let [state, left_bottom] = Layout::default()
             .direction(Direction::Vertical)
@@ -217,6 +235,7 @@ where
                 n_orders,
                 n_patterns,
                 message: _,
+                ..
             } = play_state.module_info.clone();
 
             let MomentState {
