@@ -17,7 +17,7 @@ use crate::{
     app::AppState,
     backend::DecodeStatus,
     player::{ModuleInfo, MomentState},
-    util::LayoutSplitN,
+    util::{center_region, LayoutSplitN},
 };
 
 use tui::{
@@ -299,18 +299,26 @@ where
         let app_state = self.app_state;
         let color_scheme = &self.color_scheme;
 
-        let (titles, now_playing) = {
+        let window_height = area.height as usize - 2;
+
+        let (shown_titles, list_len, now_playing, offset) = {
             let playlist = app_state.playlist.lock().unwrap();
-            let titles = playlist
+            let list_len = playlist.items.len();
+            let now_playing = playlist.now_playing;
+            let offset = now_playing
+                .map(|s| center_region(list_len, window_height, s))
+                .unwrap_or(0);
+            let shown_titles = playlist
                 .items
                 .iter()
+                .skip(offset)
+                .take(window_height)
                 .map(|item| item.mod_path.display_name())
                 .collect::<Vec<_>>();
-            let now_playing = playlist.now_playing;
-            (titles, now_playing)
+            (shown_titles, list_len, now_playing, offset)
         };
 
-        let items: Vec<ListItem> = titles
+        let items: Vec<ListItem> = shown_titles
             .iter()
             .cloned()
             .map(|line| {
@@ -322,9 +330,8 @@ where
         let now_playing_text = now_playing
             .map(|n| n.to_string())
             .unwrap_or_else(|| "-".to_string());
-        let n_items = items.len();
 
-        let block = self.new_block(format!("Playlist {}/{}", now_playing_text, n_items));
+        let block = self.new_block(format!("Playlist {}/{}", now_playing_text, list_len));
 
         let items = List::new(items)
             .block(block)
@@ -333,7 +340,7 @@ where
             .highlight_symbol(">> ");
 
         let mut state = ListState::default();
-        state.select(now_playing);
+        state.select(now_playing.map(|s| s - offset));
 
         self.frame.render_stateful_widget(items, area, &mut state);
     }

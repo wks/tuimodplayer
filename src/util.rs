@@ -70,3 +70,31 @@ impl LayoutSplitN for Layout {
         })
     }
 }
+
+/// Given the length of a list `list_len`,
+/// the height of the window `window_len`,
+/// and the index of the selected item `selected`,
+/// find the ideal offset so that
+/// when items in the range `offset..(offset+window_len) are displayed,
+/// the selected item is right in the middle of the displayed items.
+pub fn center_region(list_len: usize, window_len: usize, selected: usize) -> usize {
+    assert!(selected < list_len);
+    let result = if list_len <= window_len {
+        0
+    } else {
+        let half_window = window_len / 2;
+        if selected <= half_window {
+            0
+        } else if list_len - selected <= window_len - half_window {
+            list_len - window_len
+        } else {
+            selected - half_window
+        }
+    };
+
+    // Assert that the selected item is within the window.
+    assert!(window_len == 0 || selected >= result);
+    assert!(window_len == 0 || selected < result + window_len);
+
+    result
+}
