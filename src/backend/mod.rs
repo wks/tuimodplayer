@@ -29,17 +29,6 @@ pub enum BackendEvent {
     StartedPlaying { play_state: PlayState },
     PlayListExhausted,
 }
-pub enum ControlEvent {
-    Generic(Box<dyn FnOnce(&mut Module) + Send + 'static>),
-    Reload,
-    UpdateControl(ModuleControl),
-}
-
-impl ControlEvent {
-    pub fn generic(f: impl FnOnce(&mut Module) + Send + 'static) -> Self {
-        Self::Generic(Box::new(f))
-    }
-}
 
 #[derive(Default, Clone, Copy)]
 pub struct DecodeStatus {
@@ -48,11 +37,12 @@ pub struct DecodeStatus {
     pub cpu_util: f64,
 }
 
+/// The trait for an audio backend.  The main thread owns instances of `Backend`.
 pub trait Backend {
     fn start(&mut self);
     fn pause_resume(&mut self);
     fn reload(&mut self);
     fn poll_event(&mut self) -> Option<BackendEvent>;
-    fn send_event(&mut self, event: ControlEvent);
+    fn update_control(&mut self, control: ModuleControl);
     fn read_decode_status(&self) -> DecodeStatus;
 }

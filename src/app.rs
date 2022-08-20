@@ -19,7 +19,7 @@ use crate::options::Options;
 use crate::player::PlayState;
 use crate::playlist::{PlayList, PlayListModuleProvider};
 
-use crate::backend::{Backend, BackendEvent, ControlEvent, CpalBackend};
+use crate::backend::{Backend, BackendEvent, CpalBackend};
 use crate::ui::run_ui;
 
 use anyhow::Result;
@@ -76,8 +76,7 @@ impl AppState {
 
     fn send_apply_mod_settings_event(&mut self) {
         let control_clone = self.control.clone();
-        self.backend
-            .send_event(ControlEvent::UpdateControl(control_clone));
+        self.backend.update_control(control_clone);
     }
 
     pub fn tempo_down(&mut self) {

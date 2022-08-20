@@ -26,8 +26,9 @@ use crate::{
     player::{ModuleInfo, MomentState, PlayState},
 };
 
-use super::{Backend, BackendEvent, ControlEvent, DecodeStatus, ModuleProvider};
+use super::{Backend, BackendEvent, DecodeStatus, ModuleProvider};
 
+/// CPAL backend.  This struct is owned by the main thread.
 pub struct CpalBackend {
     pub host: Host,
     pub device: Device,
@@ -50,6 +51,18 @@ enum CurrentModuleState {
         moment_state: Arc<SeqLock<MomentState>>,
     },
     Exhausted,
+}
+
+pub enum ControlEvent {
+    Generic(Box<dyn FnOnce(&mut Module) + Send + 'static>),
+    Reload,
+    UpdateControl(ModuleControl),
+}
+
+impl ControlEvent {
+    pub fn generic(f: impl FnOnce(&mut Module) + Send + 'static) -> Self {
+        Self::Generic(Box::new(f))
+    }
 }
 
 struct CpalBackendPrivate {
@@ -279,8 +292,8 @@ impl Backend for CpalBackend {
         }
     }
 
-    fn send_event(&mut self, event: super::ControlEvent) {
-        self.sender.send(event).unwrap();
+    fn update_control(&mut self, control: super::ModuleControl) {
+        self.sender.send(ControlEvent::UpdateControl(control)).unwrap();
     }
 
     fn read_decode_status(&self) -> DecodeStatus {
