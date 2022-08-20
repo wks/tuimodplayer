@@ -27,7 +27,9 @@ pub fn handle_key_event(ev: &Event, app_state: &mut AppState) -> HandleKeyResult
     #[allow(clippy::single_match)] // Will add more event handling in the future
     #[allow(clippy::collapsible_match)]
     match ev {
-        Event::Key(KeyEvent { code, modifiers }) => match code {
+        Event::Key(KeyEvent {
+            code, modifiers, ..
+        }) => match code {
             KeyCode::Char('l') if modifiers.contains(KeyModifiers::CONTROL) => {
                 return HandleKeyResult::Redraw;
             }
