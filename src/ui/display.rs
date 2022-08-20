@@ -257,7 +257,7 @@ where
             let repeat = app_state.control.repeat;
 
             let DecodeStatus {
-                buffer_size,
+                buffer_samples: buffer_size,
                 cpu_util,
                 ..
             } = app_state.backend.read_decode_status();

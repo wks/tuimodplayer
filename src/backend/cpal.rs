@@ -11,7 +11,10 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::{self, mpsc, Arc};
+use std::{
+    sync::{self, mpsc, Arc, Condvar, Mutex},
+    time::{Duration, Instant},
+};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
@@ -36,12 +39,13 @@ pub struct CpalBackend {
     shared: Arc<CpalBackendShared>,
     paused: bool,
     receiver: mpsc::Receiver<BackendEvent>,
-    sender: mpsc::Sender<ControlEvent>,
 }
 
 struct CpalBackendShared {
     pub sample_rate: usize,
     pub decode_status: SeqLock<DecodeStatus>,
+    pub module_and_provider: Mutex<ModuleAndProvider>,
+    pub need_service_cond: Condvar,
 }
 
 enum CurrentModuleState {
@@ -53,133 +57,138 @@ enum CurrentModuleState {
     Exhausted,
 }
 
-pub enum ControlEvent {
-    Generic(Box<dyn FnOnce(&mut Module) + Send + 'static>),
-    Reload,
-    UpdateControl(ModuleControl),
+struct ModuleAndProvider {
+    pub module: CurrentModuleState,
+    pub provider: Box<dyn ModuleProvider>,
+    pub control: ModuleControl,
+    pub on_event: Box<dyn Fn(BackendEvent) + Send>,
 }
 
-impl ControlEvent {
-    pub fn generic(f: impl FnOnce(&mut Module) + Send + 'static) -> Self {
-        Self::Generic(Box::new(f))
-    }
-}
+const CHANNELS: usize = 2;
 
-struct CpalBackendPrivate {
-    shared: Arc<CpalBackendShared>,
-    module: CurrentModuleState,
-    module_provider: Box<dyn ModuleProvider>,
-    stream: sync::Weak<Stream>, // Have to close the loop with Option.
-    sender: mpsc::Sender<BackendEvent>,
-    receiver: mpsc::Receiver<ControlEvent>,
-    control: ModuleControl,
-}
-
-unsafe impl Send for CpalBackendPrivate {}
-
-impl CpalBackendPrivate {
-    pub fn on_data_requested(&mut self, data: &mut [f32], _info: &cpal::OutputCallbackInfo) {
-        let actual_read_bytes = loop {
-            while let Ok(ev) = self.receiver.try_recv() {
-                match ev {
-                    ControlEvent::Generic(f) => {
-                        if let CurrentModuleState::Loaded { ref mut module, .. } = self.module {
-                            f(module)
-                        }
-                    }
-                    ControlEvent::Reload => {
-                        self.reload();
-                    }
-                    ControlEvent::UpdateControl(control) => {
-                        self.control = control;
-                        if let CurrentModuleState::Loaded { ref mut module, .. } = self.module {
-                            apply_mod_settings(module, &self.control);
-                        }
-                    }
-                }
-            }
-
-            match self.module {
-                CurrentModuleState::NotLoaded => {
-                    self.reload();
-                    continue;
-                }
-                CurrentModuleState::Exhausted => {
-                    self.stop_self();
-                    break 0;
-                }
-                CurrentModuleState::Loaded {
-                    ref mut module,
-                    ref moment_state,
-                } => {
-                    let time1 = std::time::Instant::now();
-                    let actual_read_frames =
-                        module.read_interleaved_float_stereo(self.shared.sample_rate as i32, data);
-                    let elapsed = time1.elapsed();
-                    let elapsed_micros = elapsed.as_micros();
-                    let buf_time_micros =
-                        actual_read_frames * 1000 * 1000 / self.shared.sample_rate;
-                    let actual_read_bytes = actual_read_frames * 2;
-                    let cpu_util = if actual_read_frames == 0 {
-                        0f64
-                    } else {
-                        // Equal to elapsed_micros / buf_time_micros, but more precise.
-                        elapsed.as_nanos() as f64 * self.shared.sample_rate as f64
-                            / (actual_read_frames as f64 * 1_000_000_000_f64)
-                    };
-                    log::trace!(
-                        "buf: {}, read: {}, time: {}µs / {}µs, cpu: {}%",
-                        data.len(),
-                        actual_read_bytes,
-                        elapsed_micros,
-                        buf_time_micros,
-                        cpu_util * 100.0,
-                    );
-                    {
-                        let mut decode_status = self.shared.decode_status.lock_write();
-                        *decode_status = DecodeStatus {
-                            buffer_size: data.len(),
-                            decode_time: elapsed,
-                            cpu_util,
-                        };
-                    }
-                    if actual_read_frames > 0 {
-                        let new_moment_state = MomentState::from_module(module);
-                        {
-                            let mut moment_state = moment_state.lock_write();
-                            *moment_state = new_moment_state;
-                        }
-                        break actual_read_bytes;
-                    } else {
-                        self.module = CurrentModuleState::NotLoaded;
-                        continue;
-                    }
-                }
-            };
-        };
-
-        data[actual_read_bytes..].fill(0.0f32);
-    }
-
-    fn reload(&mut self) {
-        self.module = if let Some(mut module) = self.module_provider.poll_module() {
+impl ModuleAndProvider {
+    pub fn reload(&mut self) {
+        self.module = if let Some(mut module) = self.provider.poll_module() {
             apply_mod_settings(&mut module, &self.control);
             let moment_state: Arc<SeqLock<MomentState>> = Default::default();
             let play_state = PlayState {
                 module_info: ModuleInfo::from_module(&mut module),
                 moment_state: moment_state.clone(),
             };
-            self.sender
-                .send(BackendEvent::StartedPlaying { play_state })
-                .unwrap();
+            (self.on_event)(BackendEvent::StartedPlaying { play_state });
             CurrentModuleState::Loaded {
                 module,
                 moment_state,
             }
         } else {
-            self.sender.send(BackendEvent::PlayListExhausted).unwrap();
+            (self.on_event)(BackendEvent::PlayListExhausted);
             CurrentModuleState::Exhausted
         };
+    }
+
+    pub fn update_control(&mut self, control: ModuleControl) {
+        self.control = control;
+        if let CurrentModuleState::Loaded { ref mut module, .. } = self.module {
+            apply_mod_settings(module, &self.control);
+        }
+    }
+}
+
+struct CpalWaiter {
+    shared: Arc<CpalBackendShared>,
+}
+
+unsafe impl Send for CpalWaiter {}
+
+impl CpalWaiter {
+    pub fn run(self) {
+        let mut map = self.shared.module_and_provider.lock().unwrap();
+        loop {
+            match map.module {
+                CurrentModuleState::NotLoaded => {
+                    map.reload();
+                }
+                _ => {
+                    map = self.shared.need_service_cond.wait(map).unwrap();
+                }
+            }
+        }
+    }
+}
+
+struct CpalBackendPrivate {
+    shared: Arc<CpalBackendShared>,
+    stream: sync::Weak<Stream>, // Have to close the loop with Option.
+}
+
+unsafe impl Send for CpalBackendPrivate {}
+
+enum ModuleReadResult {
+    WouldBlock,
+    NotLoaded,
+    Exhausted,
+    Read { frames: usize, elapsed: Duration },
+}
+
+impl CpalBackendPrivate {
+    pub fn on_data_requested(&mut self, data: &mut [f32], _info: &cpal::OutputCallbackInfo) {
+        let result = self.read_as_much_as_possible_and_dont_block(data);
+
+        let actual_read_samples = if let ModuleReadResult::Read { frames, .. } = result {
+            frames * CHANNELS
+        } else {
+            0
+        };
+
+        data[actual_read_samples..].fill(0f32);
+
+        match result {
+            ModuleReadResult::WouldBlock => {
+                log::debug!("Would block! Not reading from module.");
+            }
+            ModuleReadResult::NotLoaded => {}
+            ModuleReadResult::Exhausted => {
+                self.stop_self();
+            }
+            ModuleReadResult::Read { frames, elapsed } => {
+                self.update_statistics(data.len(), frames, elapsed);
+            }
+        }
+    }
+
+    fn read_as_much_as_possible_and_dont_block(&mut self, buf: &mut [f32]) -> ModuleReadResult {
+        match self.shared.module_and_provider.try_lock() {
+            Err(_) => ModuleReadResult::WouldBlock,
+            Ok(mut map) => match map.module {
+                CurrentModuleState::NotLoaded => ModuleReadResult::NotLoaded,
+                CurrentModuleState::Exhausted => ModuleReadResult::Exhausted,
+                CurrentModuleState::Loaded {
+                    ref mut module,
+                    ref moment_state,
+                } => {
+                    let before_reading = Instant::now();
+                    let actual_read_frames =
+                        module.read_interleaved_float_stereo(self.shared.sample_rate as i32, buf);
+                    let elapsed = before_reading.elapsed();
+
+                    if actual_read_frames == 0 {
+                        map.module = CurrentModuleState::NotLoaded;
+                        self.shared.need_service_cond.notify_all();
+                    } else {
+                        let new_moment_state = MomentState::from_module(module);
+                        {
+                            let mut moment_state = moment_state.lock_write();
+                            *moment_state = new_moment_state;
+                        }
+                    }
+
+                    ModuleReadResult::Read {
+                        frames: actual_read_frames,
+                        elapsed,
+                    }
+                }
+            },
+        }
     }
 
     fn stop_self(&mut self) {
@@ -187,6 +196,40 @@ impl CpalBackendPrivate {
             stream.pause().unwrap();
         } else {
             panic!("The Stream no longer exists.  Did the main thread quit?");
+        }
+    }
+
+    fn update_statistics(
+        &mut self,
+        buffer_samples: usize,
+        read_frames: usize,
+        decode_time: Duration,
+    ) {
+        let decode_micros = decode_time.as_micros();
+        let buf_time_micros = read_frames * 1000 * 1000 / self.shared.sample_rate;
+        let read_samples = read_frames * CHANNELS;
+        let cpu_util = if read_frames == 0 {
+            0f64
+        } else {
+            // Equal to elapsed_micros / buf_time_micros, but more precise.
+            decode_time.as_nanos() as f64 * self.shared.sample_rate as f64
+                / (read_frames as f64 * 1_000_000_000_f64)
+        };
+        log::trace!(
+            "buf: {}, read: {}, time: {}µs / {}µs, cpu: {}%",
+            buffer_samples,
+            read_samples,
+            decode_micros,
+            buf_time_micros,
+            cpu_util * 100.0,
+        );
+        {
+            let mut decode_status = self.shared.decode_status.lock_write();
+            *decode_status = DecodeStatus {
+                buffer_samples,
+                decode_time,
+                cpu_util,
+            };
         }
     }
 }
@@ -224,23 +267,37 @@ impl CpalBackend {
         let config = config.with_sample_rate(cpal::SampleRate(sample_rate as u32));
         log::info!("Using output config: {:?}", config);
 
+        let (be_sender, be_receiver) = mpsc::channel();
+
         let shared = Arc::new(CpalBackendShared {
             sample_rate,
             decode_status: Default::default(),
+            module_and_provider: Mutex::new(ModuleAndProvider {
+                module: CurrentModuleState::NotLoaded,
+                provider: module_provider,
+                control,
+                on_event: Box::new(move |ev| {
+                    be_sender.send(ev).unwrap();
+                }),
+            }),
+            need_service_cond: Condvar::new(),
         });
 
-        let (ctrl_sender, ctrl_receiver) = mpsc::channel();
-        let (be_sender, be_receiver) = mpsc::channel();
+        let waiter = CpalWaiter {
+            shared: shared.clone(),
+        };
+
+        std::thread::Builder::new()
+            .name("CpalWaiter".to_string())
+            .spawn(move || {
+                waiter.run();
+            })
+            .unwrap();
 
         let stream = Arc::new_cyclic(|stream_weak| {
             let mut cpal_writer = CpalBackendPrivate {
                 shared: shared.clone(),
-                module: CurrentModuleState::NotLoaded,
-                module_provider,
                 stream: stream_weak.clone(),
-                sender: be_sender,
-                receiver: ctrl_receiver,
-                control,
             };
 
             device
@@ -261,7 +318,6 @@ impl CpalBackend {
             shared,
             paused: false,
             receiver: be_receiver,
-            sender: ctrl_sender,
         }
     }
 }
@@ -282,7 +338,8 @@ impl Backend for CpalBackend {
     }
 
     fn reload(&mut self) {
-        self.sender.send(ControlEvent::Reload).unwrap();
+        let mut map = self.shared.module_and_provider.lock().unwrap();
+        map.reload();
     }
 
     fn poll_event(&mut self) -> Option<BackendEvent> {
@@ -293,7 +350,8 @@ impl Backend for CpalBackend {
     }
 
     fn update_control(&mut self, control: super::ModuleControl) {
-        self.sender.send(ControlEvent::UpdateControl(control)).unwrap();
+        let mut map = self.shared.module_and_provider.lock().unwrap();
+        map.update_control(control);
     }
 
     fn read_decode_status(&self) -> DecodeStatus {

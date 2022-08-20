@@ -21,7 +21,8 @@ use crate::{control::ModuleControl, player::PlayState};
 
 pub use self::cpal::CpalBackend;
 
-pub trait ModuleProvider {
+pub trait ModuleProvider: Send {
+    /// Get the next module after the current module has been played.
     fn poll_module(&mut self) -> Option<Module>;
 }
 
@@ -32,7 +33,7 @@ pub enum BackendEvent {
 
 #[derive(Default, Clone, Copy)]
 pub struct DecodeStatus {
-    pub buffer_size: usize,
+    pub buffer_samples: usize,
     pub decode_time: Duration,
     pub cpu_util: f64,
 }
