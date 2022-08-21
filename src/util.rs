@@ -1,5 +1,8 @@
 use num_traits::{PrimInt, Unsigned, Zero};
-use tui::layout::{Constraint, Layout, Rect};
+use tui::{
+    layout::{Constraint, Layout, Rect},
+    text::{Span, Spans, Text},
+};
 
 // Copyright 2022 Kunshan Wang
 //
@@ -14,7 +17,7 @@ use tui::layout::{Constraint, Layout, Rect};
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::fmt::Debug;
+use std::{borrow::Cow, fmt::Debug};
 
 /// Compute (a + b) % m
 pub fn add_modulo_unsigned<T: PrimInt + Unsigned + Debug>(a: T, b: T, m: T) -> T {
@@ -105,4 +108,56 @@ pub fn center_region(list_len: usize, window_len: usize, selected: usize) -> usi
 /// such as Chinese characters, which occupy the width of two letters.
 pub fn screen_width(s: &str) -> usize {
     s.chars().count()
+}
+
+/// Wrap lines of a `Text` to a fixed width.
+/// Oblivious of "word".  Behave more like consoles.
+pub fn force_wrap_text<'a>(text: &Text<'a>, width: usize) -> Text<'a> {
+    Text {
+        lines: text
+            .lines
+            .iter()
+            .flat_map(|s| force_wrap_spans(s, width))
+            .collect(),
+    }
+}
+
+pub fn force_wrap_spans<'a, 'b>(spans: &Spans<'a>, width: usize) -> Vec<Spans<'b>> {
+    let mut lines: Vec<Spans> = vec![];
+    let mut current_line = vec![];
+    let mut line_rem_len = width;
+    for span in spans.0.iter() {
+        let content_len = span.content.len();
+        let mut content_cursor = 0;
+        while content_len - content_cursor > line_rem_len {
+            let portion_content =
+                span.content[content_cursor..content_cursor + line_rem_len].to_string();
+            content_cursor += line_rem_len;
+
+            let small_span = Span {
+                content: Cow::Owned(portion_content),
+                style: span.style,
+            };
+            current_line.push(small_span);
+            lines.push(Spans(current_line));
+
+            current_line = vec![];
+            line_rem_len = width;
+        }
+
+        assert!(content_len - content_cursor <= line_rem_len);
+
+        if content_len - content_cursor > 0 {
+            let portion_content = span.content[content_cursor..].to_string();
+            let small_span = Span {
+                content: Cow::Owned(portion_content),
+                style: span.style,
+            };
+            current_line.push(small_span);
+        }
+    }
+    if !current_line.is_empty() {
+        lines.push(Spans(current_line))
+    }
+    lines
 }

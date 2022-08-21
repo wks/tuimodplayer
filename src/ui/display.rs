@@ -26,7 +26,7 @@ use tui::{
     style::{Color, Modifier, Style},
     terminal::Frame,
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
 pub fn render_ui<'a, 'f, 't, B>(frame: &'f mut Frame<'t, B>, area: Rect, app_state: &'a AppState)
@@ -383,13 +383,35 @@ where
     }
 
     fn render_log(&mut self, area: Rect) {
-        let text = crate::logging::last_n_records(area.height as usize);
+        let width = (area.width - 2) as usize;
+        let height = (area.height - 2) as usize;
+
+        let log_records = crate::logging::last_n_records(height);
+
+        let mut last_texts = vec![];
+        let mut last_texts_lines = 0;
+
+        for record in log_records.iter().rev() {
+            let text = Text::from(record.as_str());
+            let wrapped = crate::util::force_wrap_text(&text, width);
+            let num_lines = wrapped.lines.len();
+
+            last_texts.push(wrapped);
+            last_texts_lines += num_lines;
+
+            if last_texts_lines > height {
+                break;
+            }
+        }
+
+        let list_ltems = last_texts
+            .into_iter()
+            .rev()
+            .map(ListItem::new)
+            .collect::<Vec<_>>();
 
         let block = self.new_block("Log");
-        let paragraph = self
-            .new_paragraph_from_raw_lines(text)
-            .wrap(Wrap { trim: true })
-            .block(block);
-        self.frame.render_widget(paragraph, area);
+        let list = List::new(list_ltems).block(block);
+        self.frame.render_widget(list, area);
     }
 }
