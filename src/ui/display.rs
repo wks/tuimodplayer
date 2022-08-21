@@ -16,6 +16,7 @@ use std::borrow::Cow;
 use crate::{
     app::AppState,
     backend::DecodeStatus,
+    logging::LogRecord,
     player::{ModuleInfo, MomentState},
     util::{center_region, LayoutSplitN},
 };
@@ -43,6 +44,13 @@ struct ColorScheme {
     key: Style,
     block_title: Style,
     list_highlight: Style,
+    log_error: Style,
+    log_warn: Style,
+    log_info: Style,
+    log_debug: Style,
+    log_trace: Style,
+    log_target: Style,
+    log_message: Style,
 }
 
 impl Default for ColorScheme {
@@ -60,6 +68,31 @@ impl Default for ColorScheme {
                 .fg(Color::Black)
                 .bg(Color::LightGreen)
                 .add_modifier(Modifier::BOLD),
+            log_error: Style::default()
+                .fg(Color::Red)
+                .bg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+            log_warn: Style::default()
+                .fg(Color::Magenta)
+                .bg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+            log_info: Style::default()
+                .fg(Color::Green)
+                .bg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+            log_debug: Style::default()
+                .fg(Color::Blue)
+                .bg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+            log_trace: Style::default()
+                .fg(Color::Yellow)
+                .bg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+            log_target: Style::default()
+                .fg(Color::Gray)
+                .bg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+            log_message: Style::default().fg(Color::White).bg(Color::Black),
         }
     }
 }
@@ -106,6 +139,16 @@ trait ThemedUIBuilder {
             .collect();
         let text = Text::from(spanses);
         Paragraph::new(text).style(self.color_scheme().normal)
+    }
+
+    fn style_for_log_level(&self, level: log::Level) -> Style {
+        match level {
+            log::Level::Error => self.color_scheme().log_error,
+            log::Level::Warn => self.color_scheme().log_warn,
+            log::Level::Info => self.color_scheme().log_info,
+            log::Level::Debug => self.color_scheme().log_debug,
+            log::Level::Trace => self.color_scheme().log_trace,
+        }
     }
 }
 
@@ -385,21 +428,44 @@ where
     fn render_log(&mut self, area: Rect) {
         let width = (area.width - 2) as usize;
         let height = (area.height - 2) as usize;
+        let message_width = width - 6;
 
         let log_records = crate::logging::last_n_records(height);
 
         let mut last_texts = vec![];
         let mut last_texts_lines = 0;
 
-        for record in log_records.iter().rev() {
-            let text = Text::from(record.as_str());
-            let wrapped = crate::util::force_wrap_text(&text, width);
-            let num_lines = wrapped.lines.len();
+        for record in log_records.into_iter().rev() {
+            let LogRecord {
+                level,
+                target,
+                message,
+            } = record;
+            let level_string = level.to_string();
+            let level_string_len = level_string.len();
+            let level_span = self.new_span(level.to_string(), self.style_for_log_level(level));
+            let title_space_span = self.new_span_normal(" ".repeat(6 - level_string_len));
+            let target_span = self.new_span(target, self.color_scheme().log_target);
+            let title_line = Spans(vec![level_span, title_space_span, target_span]);
+            let mut lines: Vec<Spans> = vec![title_line];
 
-            last_texts.push(wrapped);
-            last_texts_lines += num_lines;
+            let indent_span = self.new_span_normal(" ".repeat(6));
 
-            if last_texts_lines > height {
+            let message_spans =
+                Spans(vec![self.new_span(message, self.color_scheme().log_message)]);
+            let mut wrapped = crate::util::force_wrap_spans(&message_spans, message_width);
+            wrapped.iter_mut().for_each(|s| {
+                s.0.insert(0, indent_span.clone());
+            });
+            lines.append(&mut wrapped);
+
+            let num_lines = lines.len();
+            let text = Text { lines };
+
+            if last_texts.is_empty() || last_texts_lines + num_lines <= height {
+                last_texts.push(text);
+                last_texts_lines += num_lines;
+            } else {
                 break;
             }
         }

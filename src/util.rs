@@ -112,6 +112,7 @@ pub fn screen_width(s: &str) -> usize {
 
 /// Wrap lines of a `Text` to a fixed width.
 /// Oblivious of "word".  Behave more like consoles.
+#[allow(unused)]
 pub fn force_wrap_text<'a>(text: &Text<'a>, width: usize) -> Text<'a> {
     Text {
         lines: text

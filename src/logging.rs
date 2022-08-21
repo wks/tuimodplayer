@@ -30,7 +30,7 @@ pub fn set_stderr_enabled(value: bool) {
     LOGGER_SHARED.enable_stderr.store(value, Ordering::SeqCst)
 }
 
-pub fn last_n_records(n: usize) -> Vec<String> {
+pub fn last_n_records(n: usize) -> Vec<LogRecord> {
     let buffer = LOGGER_SHARED.log_buffer.lock().unwrap();
     buffer.last_n(n)
 }
@@ -40,21 +40,34 @@ struct LoggerShared {
     log_buffer: Mutex<LogBuffer>,
 }
 
+#[derive(Clone)]
+pub struct LogRecord {
+    pub level: log::Level,
+    pub target: String,
+    pub message: String,
+}
+
+impl std::fmt::Display for LogRecord {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} [{}] {}", self.level, self.target, self.message)
+    }
+}
+
 struct LogBuffer {
-    buffer: VecDeque<String>,
+    buffer: VecDeque<LogRecord>,
 }
 
 impl LogBuffer {
     const RETAIN: usize = 200;
 
-    pub fn push(&mut self, string: String) {
-        self.buffer.push_back(string);
+    pub fn push(&mut self, record: LogRecord) {
+        self.buffer.push_back(record);
         while self.buffer.len() > Self::RETAIN {
             self.buffer.pop_front();
         }
     }
 
-    pub fn last_n(&self, n: usize) -> Vec<String> {
+    pub fn last_n(&self, n: usize) -> Vec<LogRecord> {
         let len = self.buffer.len();
         self.buffer
             .iter()
@@ -84,12 +97,17 @@ impl log::Log for Logger {
 
     fn log(&self, record: &log::Record) {
         if self.enabled(record.metadata()) {
-            let string = format!("{} - {}", record.level(), record.args());
+            let my_record = LogRecord {
+                level: record.level(),
+                target: record.target().to_string(),
+                message: record.args().to_string(),
+            };
+            let string = my_record.to_string();
             if self.shared.enable_stderr.load(Ordering::SeqCst) {
                 eprintln!("{}", string);
             }
             let mut log_buffer = self.shared.log_buffer.lock().unwrap();
-            log_buffer.push(string);
+            log_buffer.push(my_record);
         }
     }
 
