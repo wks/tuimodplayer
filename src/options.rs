@@ -34,12 +34,19 @@ pub struct Options {
     /// For archives and directories, it will search for all mod files inside.
     #[clap(name = "PATH")]
     pub paths: Vec<String>,
+
     #[clap(
         long,
         default_value_t = DEFAULT_SAMPLE_RATE,
         validator = parse_sample_rate
     )]
     pub sample_rate: usize,
+
+    /// If set, the player will search for modules in nested archives.
+    /// By default, it will only search one level in each archive in the filesystem,
+    /// and also recognise archived single files (like "*.mod.zip") in archives.
+    #[clap(short = 'd', long)]
+    pub deep_archive_search: bool,
 }
 
 enum RangeParseError {

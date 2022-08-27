@@ -54,28 +54,24 @@ fn is_supported_archive(ext: &OsStr) -> bool {
     ext.to_ascii_lowercase() == "zip"
 }
 
+fn get_stem_path(path: &Path) -> Option<&Path> {
+    path.file_stem().map(Path::new)
+}
+
 pub fn extension_is_supported(path: &Path) -> bool {
     path.extension().is_some_and2(|e| is_supported_mod(e))
+}
+
+pub fn extension2_is_supported(path: &Path) -> bool {
+    get_stem_path(path).is_some_and2(|stem_path| extension_is_supported(stem_path))
 }
 
 pub fn extension_is_archive(path: &Path) -> bool {
     path.extension().is_some_and2(|e| is_supported_archive(e))
 }
 
-fn get_stem_path(path: &Path) -> Option<&Path> {
-    path.file_stem().map(Path::new)
-}
-
-pub fn extension_is_archive_of_single_mod(path: &Path) -> bool {
-    if !extension_is_archive(path) {
-        return false;
-    }
-
-    get_stem_path(path).is_some_and2(|stem_path| extension_is_supported(stem_path))
-}
-
-pub fn load_from_path(playlist: &mut PlayList, root_path: &str) {
-    let mut loader = RecursiveModuleLoader::new(|mod_path| {
+pub fn load_from_path(playlist: &mut PlayList, root_path: &str, deep_archive_search: bool) {
+    let mut loader = RecursiveModuleLoader::new(deep_archive_search, |mod_path| {
         playlist.add_item(PlayListItem {
             mod_path,
             metadata: None,
@@ -89,12 +85,19 @@ pub fn load_from_path(playlist: &mut PlayList, root_path: &str) {
 }
 
 struct RecursiveModuleLoader<F: FnMut(ModPath)> {
+    /// If false, the loader will not look into nested archives.
+    /// Instead, it will use filename heuristics to identify archives of single module.
+    deep_archive_search: bool,
+    /// Call-back function to visit each generated `ModPath`.
     sink: F,
 }
 
 impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
-    pub fn new(sink: F) -> Self {
-        Self { sink }
+    pub fn new(deep_archive_search: bool, sink: F) -> Self {
+        Self {
+            deep_archive_search,
+            sink,
+        }
     }
 
     pub fn load_from_root_path(&mut self, root_path: &Path) {
@@ -177,28 +180,30 @@ impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
             let mut mod_path = template.clone();
             mod_path.archive_paths.push(name);
             (self.sink)(mod_path);
-        } else if extension_is_archive_of_single_mod(name_path) {
-            let mut mod_path = template.clone();
-            mod_path.archive_paths.push(name);
-            mod_path.is_archived_single = true;
-            (self.sink)(mod_path);
         } else if extension_is_archive(name_path) {
-            let mut sub_template = template.clone();
-            sub_template.archive_paths.push(name.clone());
-            let mut content = Vec::new();
-            match zip_file.read_to_end(&mut content) {
-                Ok(_) => {
-                    let cursor = Cursor::new(content);
-                    self.load_from_archive(sub_template, cursor);
+            if self.deep_archive_search {
+                let mut sub_template = template.clone();
+                sub_template.archive_paths.push(name.clone());
+                let mut content = Vec::new();
+                match zip_file.read_to_end(&mut content) {
+                    Ok(_) => {
+                        let cursor = Cursor::new(content);
+                        self.load_from_archive(sub_template, cursor);
+                    }
+                    Err(e) => {
+                        log::debug!(
+                            "Cannot open inner archive {}:{} Error: {}",
+                            template.display_full_name(),
+                            name,
+                            e
+                        );
+                    }
                 }
-                Err(e) => {
-                    log::debug!(
-                        "Cannot open inner archive {}:{} Error: {}",
-                        template.display_full_name(),
-                        name,
-                        e
-                    );
-                }
+            } else if extension2_is_supported(name_path) {
+                let mut mod_path = template.clone();
+                mod_path.archive_paths.push(name);
+                mod_path.is_archived_single = true;
+                (self.sink)(mod_path);
             }
         } else {
             log::debug!(

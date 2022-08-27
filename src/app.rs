@@ -149,7 +149,7 @@ pub fn run(options: Options) -> Result<()> {
     let mut playlist = PlayList::new();
 
     for path in options.paths.iter() {
-        crate::playlist::load_from_path(&mut playlist, path);
+        crate::playlist::load_from_path(&mut playlist, path, options.deep_archive_search);
     }
 
     let playlist = Arc::new(Mutex::new(playlist));
