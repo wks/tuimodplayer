@@ -18,6 +18,7 @@ pub struct ModPath {
     pub root_path: OsString,
     pub file_path: OsString,
     pub archive_paths: Vec<String>,
+    pub is_archived_single: bool,
 }
 
 impl ModPath {

@@ -47,12 +47,23 @@ pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
         );
         Ok(open_module(file)?)
     } else {
-        let mut content = read_file_from_archive(file, &mod_path.archive_paths[0])?;
+        log::info!(
+            "Opening file in archive: {}",
+            mod_path.file_path.to_string_lossy()
+        );
+        let mut content =
+            read_file_from_archive(file, ReadWhatFromArchive::Name(&mod_path.archive_paths[0]))?;
 
         for archive_path in mod_path.archive_paths[1..].iter() {
             let cursor = Cursor::new(content);
-            content =
-                read_file_from_archive(cursor, archive_path).context("Opening inner archive")?;
+            content = read_file_from_archive(cursor, ReadWhatFromArchive::Name(archive_path))
+                .context("Opening inner archive")?;
+        }
+
+        if mod_path.is_archived_single {
+            let cursor = Cursor::new(content);
+            content = read_file_from_archive(cursor, ReadWhatFromArchive::First)
+                .context("Opening archived single")?;
         }
 
         let cursor = Cursor::new(content);
@@ -60,9 +71,17 @@ pub fn open_module_from_mod_path(mod_path: &ModPath) -> Result<Module> {
     }
 }
 
-pub fn read_file_from_archive(archive: impl Read + Seek, archive_path: &str) -> Result<Vec<u8>> {
+enum ReadWhatFromArchive<'a> {
+    Name(&'a str),
+    First,
+}
+
+fn read_file_from_archive(archive: impl Read + Seek, what: ReadWhatFromArchive) -> Result<Vec<u8>> {
     let mut zip = ZipArchive::new(archive)?;
-    let mut zip_file = zip.by_name(archive_path)?;
+    let mut zip_file = match what {
+        ReadWhatFromArchive::Name(archive_path) => zip.by_name(archive_path)?,
+        ReadWhatFromArchive::First => zip.by_index(0)?,
+    };
     let zip_file_size = zip_file.size();
     let size = usize::try_from(zip_file_size)
         .map_err(|_| anyhow::anyhow!("File too large: {}", zip_file_size))?;

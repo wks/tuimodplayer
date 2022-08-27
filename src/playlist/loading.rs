@@ -15,7 +15,8 @@ use anyhow::Result;
 use lazy_static::lazy_static;
 
 use std::{
-    ffi::OsString,
+    collections::HashSet,
+    ffi::{OsStr, OsString},
     fs::File,
     io::{BufReader, Cursor, Read, Seek},
     path::Path,
@@ -25,6 +26,7 @@ use zip::read::ZipFile;
 use walkdir::WalkDir;
 
 use crate::playlist::PlayListItem;
+use crate::util::IsSomeAnd;
 
 use super::{ModPath, PlayList};
 
@@ -36,32 +38,40 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
 ];
 
 lazy_static! {
-    static ref SUPPORTED_EXTENSIONS_OSSTR: Vec<OsString> = {
+    static ref SUPPORTED_EXTENSIONS_OSSTR: HashSet<OsString> = {
         SUPPORTED_EXTENSIONS
             .iter()
             .map(|s| s.into())
-            .collect::<Vec<_>>()
+            .collect::<HashSet<_>>()
     };
 }
 
-pub fn extension_is_supported(path: impl AsRef<Path>) -> bool {
-    if let Some(ext) = path.as_ref().extension() {
-        let ext_lower = ext.to_ascii_lowercase();
-        SUPPORTED_EXTENSIONS_OSSTR
-            .iter()
-            .any(|sup_ext| ext_lower == *sup_ext)
-    } else {
-        false
-    }
+fn is_supported_mod(ext: &OsStr) -> bool {
+    SUPPORTED_EXTENSIONS_OSSTR.contains(&ext.to_ascii_lowercase())
 }
 
-fn extension_is_archive(path: impl AsRef<Path>) -> bool {
-    if let Some(ext) = path.as_ref().extension() {
-        let ext_lower = ext.to_ascii_lowercase();
-        ext_lower == "zip"
-    } else {
-        false
+fn is_supported_archive(ext: &OsStr) -> bool {
+    ext.to_ascii_lowercase() == "zip"
+}
+
+pub fn extension_is_supported(path: &Path) -> bool {
+    path.extension().is_some_and2(|e| is_supported_mod(e))
+}
+
+pub fn extension_is_archive(path: &Path) -> bool {
+    path.extension().is_some_and2(|e| is_supported_archive(e))
+}
+
+fn get_stem_path(path: &Path) -> Option<&Path> {
+    path.file_stem().map(Path::new)
+}
+
+pub fn extension_is_archive_of_single_mod(path: &Path) -> bool {
+    if !extension_is_archive(path) {
+        return false;
     }
+
+    get_stem_path(path).is_some_and2(|stem_path| extension_is_supported(stem_path))
 }
 
 pub fn load_from_path(playlist: &mut PlayList, root_path: &str) {
@@ -109,6 +119,7 @@ impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
                 root_path: root_path.into(),
                 file_path: path.into(),
                 archive_paths: vec![],
+                is_archived_single: false,
             });
         }
     }
@@ -120,6 +131,7 @@ impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
                     root_path: root_path.into(),
                     file_path: path.into(),
                     archive_paths: Vec::new(),
+                    is_archived_single: false,
                 };
                 self.load_from_archive(template, buf_reader);
             }
@@ -160,11 +172,17 @@ impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
 
     pub fn load_from_file_in_archive(&mut self, template: &ModPath, mut zip_file: ZipFile) {
         let name = zip_file.name().to_string();
-        if extension_is_supported(&name) {
+        let name_path = Path::new(&name);
+        if extension_is_supported(name_path) {
             let mut mod_path = template.clone();
             mod_path.archive_paths.push(name);
             (self.sink)(mod_path);
-        } else if extension_is_archive(&name) {
+        } else if extension_is_archive_of_single_mod(name_path) {
+            let mut mod_path = template.clone();
+            mod_path.archive_paths.push(name);
+            mod_path.is_archived_single = true;
+            (self.sink)(mod_path);
+        } else if extension_is_archive(name_path) {
             let mut sub_template = template.clone();
             sub_template.archive_paths.push(name.clone());
             let mut content = Vec::new();
@@ -204,6 +222,7 @@ impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
                         root_path: root_path.into(),
                         file_path: file_path.into(),
                         archive_paths: vec![],
+                        is_archived_single: false,
                     })
                 } else if extension_is_archive(file_path) {
                     self.load_from_fs_archive_file(root_path, file_path)
