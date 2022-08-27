@@ -8,7 +8,7 @@ license = "GPL-3.0"
 
 [dependencies]
 openmpt = { git = "https://github.com/sm-Fifteen/openmpt-rs" }
-cpal = { version = "0.13.5" }
+cpal = { version = "0.14.0" }
 anyhow = "1.0.56"
 zip = "0.6.2"
 clap = { version = "3.2.8", features = ["derive"] }
