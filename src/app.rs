@@ -148,8 +148,14 @@ impl AppState {
 pub fn run(options: Options) -> Result<()> {
     let mut playlist = PlayList::new();
 
+    log::info!("Loading from {} root paths...", options.paths.len());
     for path in options.paths.iter() {
         crate::playlist::load_from_path(&mut playlist, path, options.deep_archive_search);
+    }
+
+    log::info!("Shuffling playlist...");
+    if options.shuffle {
+        playlist.shuffle();
     }
 
     let playlist = Arc::new(Mutex::new(playlist));

@@ -42,6 +42,12 @@ cd tuimodplayer
 cargo run --release -- /path/to/modarchive_2007_official_snapshot_120000_modules
 ```
 
+If you would like to randomise the playlist, add the `-s` option.
+
+```sh
+cargo run --release -- /path/to/modarchive_2007_official_snapshot_120000_modules -s
+```
+
 ## Key Bindings
 
 List available key bindings:

@@ -47,6 +47,10 @@ pub struct Options {
     /// and also recognise archived single files (like "*.mod.zip") in archives.
     #[clap(short = 'd', long)]
     pub deep_archive_search: bool,
+
+    /// Shuffle the playlist on startup.
+    #[clap(short = 's', long)]
+    pub shuffle: bool,
 }
 
 enum RangeParseError {

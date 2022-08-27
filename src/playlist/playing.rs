@@ -12,6 +12,7 @@
 // not, see <https://www.gnu.org/licenses/>.
 
 use openmpt::module::Module;
+use rand::prelude::SliceRandom;
 use std::sync::{Arc, Mutex};
 
 use crate::{
@@ -112,6 +113,11 @@ impl PlayList {
 
         self.next_to_play = maybe_next;
         maybe_next.is_some()
+    }
+
+    pub fn shuffle(&mut self) {
+        let mut rng = rand::thread_rng();
+        self.items.shuffle(&mut rng);
     }
 }
 
