@@ -31,7 +31,7 @@ pub const MAX_SAMPLE_RATE: usize = 192000;
 #[clap(version, about, long_about = None)]
 pub struct Options {
     /// Paths to individual mods, archives or directories.
-    /// For archives and directories, it will search for all mod files inside.
+    /// For archives and directories, it will search for mod files inside.
     #[clap(name = "PATH")]
     pub paths: Vec<String>,
 
