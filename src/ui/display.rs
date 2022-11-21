@@ -391,6 +391,7 @@ where
 
             let list_len = playlist.len();
             let now_playing = playlist.now_playing_in_view;
+            assert!(now_playing.is_none() || list_len > 0);
             let offset = now_playing
                 .map(|s| center_region(list_len, window_height, s))
                 .unwrap_or(0);
@@ -507,12 +508,8 @@ where
     }
 
     fn render_filter(&mut self, area: Rect, maybe_filter_string: Option<String>, editing: bool) {
-        let title = if editing {
-            "Filter (edit)"
-        } else {
-            "Filter"
-        };
-        let filter_string = maybe_filter_string.as_ref().map(|s| s.as_str()).unwrap_or("");
+        let title = if editing { "Filter (edit)" } else { "Filter" };
+        let filter_string = maybe_filter_string.as_deref().unwrap_or("");
         let block = self.new_block(title);
         let paragraph = Paragraph::new(self.new_span_value(filter_string)).block(block);
         self.frame.render_widget(paragraph, area);

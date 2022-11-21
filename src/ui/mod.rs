@@ -27,7 +27,8 @@ use self::{
     display::render_ui,
 };
 
-static mut OLD_HOOK: Option<Box<dyn Fn(&PanicInfo) + Sync + Send>> = None;
+type BoxedHook = Box<dyn Fn(&PanicInfo) + Sync + Send>;
+static mut OLD_HOOK: Option<BoxedHook> = None;
 static REGISTER_PANIC_HOOK: std::sync::Once = std::sync::Once::new();
 
 fn ui_panic_hook(panic_info: &PanicInfo<'_>) {

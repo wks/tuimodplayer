@@ -81,7 +81,7 @@ impl LayoutSplitN for Layout {
 /// when items in the range `offset..(offset+window_len) are displayed,
 /// the selected item is right in the middle of the displayed items.
 pub fn center_region(list_len: usize, window_len: usize, selected: usize) -> usize {
-//    assert!(selected < list_len);
+    assert!(selected < list_len);
     let result = if list_len <= window_len {
         0
     } else {

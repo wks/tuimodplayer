@@ -114,7 +114,9 @@ impl PlayList {
         let maybe_module = loop {
             if let Some(index) = self.next_to_play {
                 self.now_playing_in_view = self.next_to_play.take();
-                self.now_playing_in_items = self.now_playing_in_view.map(|view_index| self.view_index_to_items_index(view_index));
+                self.now_playing_in_items = self
+                    .now_playing_in_view
+                    .map(|view_index| self.view_index_to_items_index(view_index));
 
                 let item = self.get_item(index).unwrap_or_else(|| {
                     panic!("next_to_play points to non-existing item: {}", index)
