@@ -14,7 +14,7 @@
 use std::borrow::Cow;
 
 use crate::{
-    app::AppState,
+    app::{AppState, UiMode},
     backend::DecodeStatus,
     logging::LogRecord,
     player::{ModuleInfo, MomentState},
@@ -256,15 +256,38 @@ where
             .direction(Direction::Vertical)
             .split_n(left, [Constraint::Length(7), Constraint::Min(1)]);
 
-        let [playlist, log] = Layout::default().direction(Direction::Horizontal).split_n(
+        let [playlist_filter, log] = Layout::default().direction(Direction::Horizontal).split_n(
             left_bottom,
             [Constraint::Ratio(1, 2), Constraint::Ratio(1, 2)],
         );
+
+        let maybe_filter_string = {
+            let playlist = self.app_state.playlist.lock().unwrap();
+            playlist.get_filter_string()
+        };
+
+        let (show_filter, edit_filter) = match self.app_state.ui_mode {
+            UiMode::Normal => (maybe_filter_string.is_some(), false),
+            UiMode::Filter => (true, true),
+        };
+
+        let (playlist, maybe_filter) = if show_filter {
+            let [filter, playlist] = Layout::default().direction(Direction::Vertical).split_n(
+                playlist_filter,
+                [Constraint::Length(3), Constraint::Percentage(100)],
+            );
+            (playlist, Some(filter))
+        } else {
+            (playlist_filter, None)
+        };
 
         self.render_state(state);
         self.render_playlist(playlist);
         self.render_message(message);
         self.render_log(log);
+        if let Some(filter) = maybe_filter {
+            self.render_filter(filter, maybe_filter_string, edit_filter);
+        }
     }
 
     fn render_state(&mut self, area: Rect) {
@@ -365,17 +388,19 @@ where
 
         let (shown_titles, list_len, now_playing, offset) = {
             let playlist = app_state.playlist.lock().unwrap();
-            let list_len = playlist.items.len();
-            let now_playing = playlist.now_playing;
+
+            let list_len = playlist.len();
+            let now_playing = playlist.now_playing_in_view;
             let offset = now_playing
                 .map(|s| center_region(list_len, window_height, s))
                 .unwrap_or(0);
-            let shown_titles = playlist
-                .items
-                .iter()
-                .skip(offset)
-                .take(window_height)
-                .map(|item| item.mod_path.display_name())
+            let limit = (offset + window_height).min(playlist.len());
+
+            let shown_titles = (offset..limit)
+                .map(|i| {
+                    let item = playlist.get_item(i).unwrap();
+                    item.mod_path.display_name()
+                })
                 .collect::<Vec<_>>();
             (shown_titles, list_len, now_playing, offset)
         };
@@ -479,5 +504,17 @@ where
         let block = self.new_block("Log");
         let list = List::new(list_ltems).block(block);
         self.frame.render_widget(list, area);
+    }
+
+    fn render_filter(&mut self, area: Rect, maybe_filter_string: Option<String>, editing: bool) {
+        let title = if editing {
+            "Filter (edit)"
+        } else {
+            "Filter"
+        };
+        let filter_string = maybe_filter_string.as_ref().map(|s| s.as_str()).unwrap_or("");
+        let block = self.new_block(title);
+        let paragraph = Paragraph::new(self.new_span_value(filter_string)).block(block);
+        self.frame.render_widget(paragraph, area);
     }
 }

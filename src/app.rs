@@ -24,12 +24,20 @@ use crate::ui::run_ui;
 
 use anyhow::Result;
 
+#[derive(Default)]
+pub enum UiMode {
+    #[default]
+    Normal,
+    Filter,
+}
+
 pub struct AppState {
     pub options: Options,
     pub play_state: Option<PlayState>,
     pub backend: Box<dyn Backend>,
     pub playlist: Arc<Mutex<PlayList>>,
     pub control: ModuleControl,
+    pub ui_mode: UiMode,
 }
 
 impl AppState {
@@ -175,6 +183,7 @@ pub fn run(options: Options) -> Result<()> {
         backend,
         playlist,
         control,
+        ui_mode: Default::default(),
     };
 
     app_state.start_playing();
