@@ -28,28 +28,29 @@ pub const MIN_SAMPLE_RATE: usize = 8000;
 pub const MAX_SAMPLE_RATE: usize = 192000;
 
 #[derive(Parser)]
-#[clap(version, about, long_about = None)]
+#[command(version, about, long_about = None)]
 pub struct Options {
     /// Paths to individual mods, archives or directories.
     /// For archives and directories, it will search for mod files inside.
-    #[clap(name = "PATH")]
+    #[arg(name = "PATH")]
     pub paths: Vec<String>,
 
-    #[clap(
+    #[arg(
         long,
         default_value_t = DEFAULT_SAMPLE_RATE,
-        validator = parse_sample_rate
+        value_parser = parse_sample_rate,
     )]
     pub sample_rate: usize,
 
     /// If set, the player will search for modules in nested archives.
+    ///
     /// By default, it will only search one level in each archive in the filesystem,
     /// and also recognise archived single files (like "*.mod.zip") in archives.
-    #[clap(short = 'd', long)]
+    #[arg(short = 'd', long)]
     pub deep_archive_search: bool,
 
     /// Shuffle the playlist on startup.
-    #[clap(short = 's', long)]
+    #[arg(short = 's', long)]
     pub shuffle: bool,
 }
 
