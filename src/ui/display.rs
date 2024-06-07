@@ -107,7 +107,7 @@ trait ThemedUIBuilder {
             .title(Span::styled(title, self.color_scheme().block_title))
     }
 
-    fn build_state_line<'b, 't, F: FnOnce(&mut LineBuilder<Self>)>(&'b self, f: F) -> Spans<'t> {
+    fn build_state_line<'t, F: FnOnce(&mut LineBuilder<Self>)>(&self, f: F) -> Spans<'t> {
         let mut builder = LineBuilder::new(self);
         f(&mut builder);
         builder.into_spans()

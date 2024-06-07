@@ -48,6 +48,9 @@ struct CpalBackendShared {
     pub need_service_cond: Condvar,
 }
 
+unsafe impl Send for CpalBackendShared {}
+unsafe impl Sync for CpalBackendShared {}
+
 enum CurrentModuleState {
     NotLoaded,
     Loaded {

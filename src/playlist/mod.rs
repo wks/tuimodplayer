@@ -15,6 +15,6 @@ mod item;
 mod loading;
 mod playing;
 
-pub use item::{ModMetadata, ModPath, PlayListItem};
+pub use item::{ModPath, PlayListItem};
 pub use loading::load_from_path;
 pub use playing::{PlayList, PlayListModuleProvider};

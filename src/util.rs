@@ -123,7 +123,7 @@ pub fn force_wrap_text<'a>(text: &Text<'a>, width: usize) -> Text<'a> {
     }
 }
 
-pub fn force_wrap_spans<'a, 'b>(spans: &Spans<'a>, width: usize) -> Vec<Spans<'b>> {
+pub fn force_wrap_spans<'b>(spans: &Spans<'_>, width: usize) -> Vec<Spans<'b>> {
     let mut lines: Vec<Spans> = vec![];
     let mut current_line = vec![];
     let mut line_rem_len = width;
