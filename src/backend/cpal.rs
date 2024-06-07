@@ -310,6 +310,7 @@ impl CpalBackend {
                         cpal_writer.on_data_requested(data, info);
                     },
                     |err| panic!("{}", err),
+                    None,
                 )
                 .unwrap()
         });
