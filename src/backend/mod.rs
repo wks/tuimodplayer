@@ -34,6 +34,7 @@ pub enum BackendEvent {
 #[derive(Default, Clone, Copy)]
 pub struct DecodeStatus {
     pub buffer_samples: usize,
+    #[allow(unused)]
     pub decode_time: Duration,
     pub cpu_util: f64,
 }

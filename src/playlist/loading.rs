@@ -51,7 +51,7 @@ fn is_supported_mod(ext: &OsStr) -> bool {
 }
 
 fn is_supported_archive(ext: &OsStr) -> bool {
-    ext.to_ascii_lowercase() == "zip"
+    ext.eq_ignore_ascii_case("zip")
 }
 
 fn get_stem_path(path: &Path) -> Option<&Path> {

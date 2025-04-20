@@ -33,7 +33,9 @@ use super::{Backend, BackendEvent, DecodeStatus, ModuleProvider};
 
 /// CPAL backend.  This struct is owned by the main thread.
 pub struct CpalBackend {
+    #[allow(unused)]
     pub host: Host,
+    #[allow(unused)]
     pub device: Device,
     pub stream: Arc<Stream>,
     shared: Arc<CpalBackendShared>,
@@ -347,10 +349,7 @@ impl Backend for CpalBackend {
     }
 
     fn poll_event(&mut self) -> Option<BackendEvent> {
-        match self.receiver.try_recv() {
-            Ok(ev) => Some(ev),
-            Err(_) => None,
-        }
+        self.receiver.try_recv().ok()
     }
 
     fn update_control(&mut self, control: super::ModuleControl) {

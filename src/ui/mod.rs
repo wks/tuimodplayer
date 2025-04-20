@@ -14,7 +14,7 @@
 mod control;
 mod display;
 
-use std::{io::stdout, panic::PanicInfo, time::Duration};
+use std::{io::stdout, panic::PanicHookInfo, sync::OnceLock, time::Duration};
 
 use crate::app::AppState;
 
@@ -27,11 +27,15 @@ use self::{
     display::render_ui,
 };
 
-type BoxedHook = Box<dyn Fn(&PanicInfo) + Sync + Send>;
-static mut OLD_HOOK: Option<BoxedHook> = None;
-static REGISTER_PANIC_HOOK: std::sync::Once = std::sync::Once::new();
+type BoxedHook = Box<dyn Fn(&PanicHookInfo) + Sync + Send>;
 
-fn ui_panic_hook(panic_info: &PanicInfo<'_>) {
+struct PanicHookRegistration {
+    old_hook: BoxedHook,
+}
+
+static PANIC_HOOK_REGISTRATION: OnceLock<PanicHookRegistration> = OnceLock::new();
+
+fn ui_panic_hook(panic_info: &PanicHookInfo<'_>) {
     execute!(stdout(), terminal::LeaveAlternateScreen).unwrap_or_else(|e| {
         // Cannot handle error while handling panic.  Printing is the best effort.
         eprintln!("Failed to leave alternative screen: {}", e);
@@ -41,16 +45,18 @@ fn ui_panic_hook(panic_info: &PanicInfo<'_>) {
         // Cannot handle error while handling panic.  Printing is the best effort.
         eprintln!("Failed to disable raw mode: {}", e);
     });
-    let old_hook = unsafe { OLD_HOOK.as_ref().unwrap() };
+    let old_hook = &PANIC_HOOK_REGISTRATION
+        .get()
+        .expect("ui_panic_hook called but PANIC_HOOK_REGISTRATION is not initialized.")
+        .old_hook;
     old_hook(panic_info);
 }
 
 pub fn run_ui(app_state: &mut AppState) -> Result<()> {
-    REGISTER_PANIC_HOOK.call_once(|| {
-        unsafe {
-            OLD_HOOK = Some(std::panic::take_hook());
-        }
+    PANIC_HOOK_REGISTRATION.get_or_init(|| {
+        let old_hook = std::panic::take_hook();
         std::panic::set_hook(Box::new(ui_panic_hook));
+        PanicHookRegistration { old_hook }
     });
 
     terminal::enable_raw_mode()?;
