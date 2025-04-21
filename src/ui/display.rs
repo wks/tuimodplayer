@@ -21,18 +21,16 @@ use crate::{
     util::{center_region, LayoutSplitN},
 };
 
-use tui::{
-    backend::Backend,
+use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    terminal::Frame,
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    Frame,
 };
 
-pub fn render_ui<'a, 'f, 't, B>(frame: &'f mut Frame<'t, B>, area: Rect, app_state: &'a AppState)
+pub fn render_ui<'a, 'f, 't>(frame: &'f mut Frame<'t>, area: Rect, app_state: &'a AppState)
 where
-    B: Backend + 't,
     't: 'f,
 {
     let mut ui_renderer = UIRenderer::new(app_state, frame, ColorScheme::default());
@@ -107,10 +105,10 @@ trait ThemedUIBuilder {
             .title(Span::styled(title, self.color_scheme().block_title))
     }
 
-    fn build_state_line<'t, F: FnOnce(&mut LineBuilder<Self>)>(&self, f: F) -> Spans<'t> {
+    fn build_state_line<'t, F: FnOnce(&mut LineBuilder<Self>)>(&self, f: F) -> Line<'t> {
         let mut builder = LineBuilder::new(self);
         f(&mut builder);
-        builder.into_spans()
+        builder.into_line()
     }
 
     fn new_span<'t, S: Into<Cow<'t, str>>>(&self, text: S, style: Style) -> Span<'t> {
@@ -133,11 +131,11 @@ trait ThemedUIBuilder {
         &self,
         lines: Vec<S>,
     ) -> Paragraph<'t> {
-        let spanses: Vec<Spans> = lines
+        let lines: Vec<Line> = lines
             .into_iter()
-            .map(|line| Spans::from(Span::raw(line)))
+            .map(|line| Line::from(Span::raw(line)))
             .collect();
-        let text = Text::from(spanses);
+        let text = Text::from(lines);
         Paragraph::new(text).style(self.color_scheme().normal)
     }
 
@@ -165,9 +163,9 @@ impl<'t, 'b, B: ThemedUIBuilder + ?Sized> LineBuilder<'t, 'b, B> {
         }
     }
 
-    pub fn into_spans(self) -> Spans<'t> {
+    pub fn into_line(self) -> Line<'t> {
         let spans = self.spans;
-        Spans(spans)
+        Line::from(spans)
     }
 
     fn key(&mut self, s: impl Into<Cow<'t, str>>) {
@@ -196,30 +194,28 @@ impl<'t, 'b, B: ThemedUIBuilder + ?Sized> LineBuilder<'t, 'b, B> {
 /// -   `'a`: app_state
 /// -   `'f`: frame
 /// -   `'t`: the underlying terminal of the frame object. `'t` must outlive `'f'`.
-struct UIRenderer<'a, 'f, 't, B>
+struct UIRenderer<'a, 'f, 't>
 where
     't: 'f,
-    B: Backend,
 {
     app_state: &'a AppState,
-    frame: &'f mut Frame<'t, B>,
+    frame: &'f mut Frame<'t>,
     color_scheme: ColorScheme,
 }
 
-impl<B: Backend> ThemedUIBuilder for UIRenderer<'_, '_, '_, B> {
+impl ThemedUIBuilder for UIRenderer<'_, '_, '_> {
     fn color_scheme(&self) -> &ColorScheme {
         &self.color_scheme
     }
 }
 
-impl<'a, 'f, 't, B> UIRenderer<'a, 'f, 't, B>
+impl<'a, 'f, 't> UIRenderer<'a, 'f, 't>
 where
     't: 'f,
-    B: Backend,
 {
     pub fn new(
         app_state: &'a AppState,
-        frame: &'f mut Frame<'t, B>,
+        frame: &'f mut Frame<'t>,
         color_scheme: ColorScheme,
     ) -> Self {
         Self {
@@ -362,15 +358,13 @@ where
                 b.kv("CPU", format!("{:.2}%", cpu_util * 100.0));
             });
 
-            let text = Text {
-                lines: vec![
-                    title_line,
-                    player_line,
-                    speed_line,
-                    control_line,
-                    decoding_line,
-                ],
-            };
+            let text = Text::from(vec![
+                title_line,
+                player_line,
+                speed_line,
+                control_line,
+                decoding_line,
+            ]);
 
             let paragraph = Paragraph::new(text).block(block);
             self.frame.render_widget(paragraph, area);
@@ -409,9 +403,9 @@ where
         let items: Vec<ListItem> = shown_titles
             .iter()
             .cloned()
-            .map(|line| {
-                let span = Spans::from(line);
-                ListItem::new(span).style(color_scheme.normal)
+            .map(|text_line: String| {
+                let line = Line::from(text_line);
+                ListItem::new(line).style(color_scheme.normal)
             })
             .collect();
 
@@ -472,21 +466,21 @@ where
             let level_span = self.new_span(level.to_string(), self.style_for_log_level(level));
             let title_space_span = self.new_span_normal(" ".repeat(6 - level_string_len));
             let target_span = self.new_span(target, self.color_scheme().log_target);
-            let title_line = Spans(vec![level_span, title_space_span, target_span]);
-            let mut lines: Vec<Spans> = vec![title_line];
+            let title_line = Line::from(vec![level_span, title_space_span, target_span]);
+            let mut lines: Vec<Line> = vec![title_line];
 
             let indent_span = self.new_span_normal(" ".repeat(6));
 
-            let message_spans =
-                Spans(vec![self.new_span(message, self.color_scheme().log_message)]);
-            let mut wrapped = crate::util::force_wrap_spans(&message_spans, message_width);
-            wrapped.iter_mut().for_each(|s| {
-                s.0.insert(0, indent_span.clone());
+            let message_line =
+                Line::from(vec![self.new_span(message, self.color_scheme().log_message)]);
+            let mut wrapped = crate::util::force_wrap_line(&message_line, message_width);
+            wrapped.iter_mut().for_each(|l| {
+                l.spans.insert(0, indent_span.clone());
             });
             lines.append(&mut wrapped);
 
             let num_lines = lines.len();
-            let text = Text { lines };
+            let text = Text::from(lines);
 
             if last_texts.is_empty() || last_texts_lines + num_lines <= height {
                 last_texts.push(text);

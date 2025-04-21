@@ -1,7 +1,7 @@
 use num_traits::{PrimInt, Unsigned, Zero};
-use tui::{
+use ratatui::{
     layout::{Constraint, Layout, Rect},
-    text::{Span, Spans, Text},
+    text::{Line, Span, Text},
 };
 
 // Copyright 2022, 2024, 2025 Kunshan Wang
@@ -118,16 +118,17 @@ pub fn force_wrap_text<'a>(text: &Text<'a>, width: usize) -> Text<'a> {
         lines: text
             .lines
             .iter()
-            .flat_map(|s| force_wrap_spans(s, width))
+            .flat_map(|s| force_wrap_line(s, width))
             .collect(),
+        ..*text
     }
 }
 
-pub fn force_wrap_spans<'b>(spans: &Spans<'_>, width: usize) -> Vec<Spans<'b>> {
-    let mut lines: Vec<Spans> = vec![];
+pub fn force_wrap_line<'b>(in_line: &Line<'_>, width: usize) -> Vec<Line<'b>> {
+    let mut out_lines: Vec<Line> = vec![];
     let mut current_line = vec![];
     let mut line_rem_len = width;
-    for span in spans.0.iter() {
+    for span in in_line.iter() {
         let content_len = span.content.len();
         let mut content_cursor = 0;
         while content_len - content_cursor > line_rem_len {
@@ -140,7 +141,7 @@ pub fn force_wrap_spans<'b>(spans: &Spans<'_>, width: usize) -> Vec<Spans<'b>> {
                 style: span.style,
             };
             current_line.push(small_span);
-            lines.push(Spans(current_line));
+            out_lines.push(Line::from(current_line));
 
             current_line = vec![];
             line_rem_len = width;
@@ -158,9 +159,9 @@ pub fn force_wrap_spans<'b>(spans: &Spans<'_>, width: usize) -> Vec<Spans<'b>> {
         }
     }
     if !current_line.is_empty() {
-        lines.push(Spans(current_line))
+        out_lines.push(Line::from(current_line))
     }
-    lines
+    out_lines
 }
 
 /// I just want to use the unstable feature now.

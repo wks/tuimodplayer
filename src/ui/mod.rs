@@ -64,8 +64,8 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
     crate::logging::set_stderr_enabled(false);
     execute!(stdout(), terminal::EnterAlternateScreen)?;
 
-    let backend = tui::backend::CrosstermBackend::new(stdout());
-    let mut term = tui::Terminal::new(backend)?;
+    let backend = ratatui::backend::CrosstermBackend::new(stdout());
+    let mut term = ratatui::Terminal::new(backend)?;
 
     'event_loop: loop {
         let mut redraw = false;
@@ -91,7 +91,7 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
         }
 
         term.draw(|frame| {
-            let area = frame.size();
+            let area = frame.area();
             render_ui(frame, area, app_state);
         })?;
     }
