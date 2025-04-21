@@ -182,7 +182,7 @@ impl PlayList {
     }
 
     pub fn shuffle(&mut self) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         self.items.shuffle(&mut rng);
     }
 

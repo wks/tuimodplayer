@@ -173,7 +173,11 @@ impl<F: FnMut(ModPath)> RecursiveModuleLoader<F> {
         }
     }
 
-    pub fn load_from_file_in_archive(&mut self, template: &ModPath, mut zip_file: ZipFile) {
+    pub fn load_from_file_in_archive<R: Read>(
+        &mut self,
+        template: &ModPath,
+        mut zip_file: ZipFile<R>,
+    ) {
         let name = zip_file.name().to_string();
         let name_path = Path::new(&name);
         if extension_is_supported(name_path) {
