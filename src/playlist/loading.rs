@@ -12,7 +12,6 @@
 // not, see <https://www.gnu.org/licenses/>.
 
 use anyhow::Result;
-use lazy_static::lazy_static;
 
 use std::{
     collections::HashSet,
@@ -20,6 +19,7 @@ use std::{
     fs::File,
     io::{BufReader, Cursor, Read, Seek},
     path::Path,
+    sync::LazyLock,
 };
 use zip::read::ZipFile;
 
@@ -37,14 +37,12 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "stp", "symmod", "ult", "wow", "gdm", "mo3", "oxm", "umx", "xpk", "ppm", "mmcmp",
 ];
 
-lazy_static! {
-    static ref SUPPORTED_EXTENSIONS_OSSTR: HashSet<OsString> = {
-        SUPPORTED_EXTENSIONS
-            .iter()
-            .map(|s| s.into())
-            .collect::<HashSet<_>>()
-    };
-}
+static SUPPORTED_EXTENSIONS_OSSTR: LazyLock<HashSet<OsString>> = LazyLock::new(|| {
+    SUPPORTED_EXTENSIONS
+        .iter()
+        .map(|s| s.into())
+        .collect::<HashSet<_>>()
+});
 
 fn is_supported_mod(ext: &OsStr) -> bool {
     SUPPORTED_EXTENSIONS_OSSTR.contains(&ext.to_ascii_lowercase())

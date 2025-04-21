@@ -11,18 +11,12 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::{collections::VecDeque, sync::Mutex};
 
 use atomic::{Atomic, Ordering};
-use lazy_static::lazy_static;
 
 pub fn init() -> Result<(), log::SetLoggerError> {
-    let logger = Box::new(Logger {
-        shared: LOGGER_SHARED.clone(),
-    });
+    let logger = Box::new(Logger {});
     log::set_boxed_logger(logger).map(|()| log::set_max_level(log::LevelFilter::Trace))
 }
 
@@ -77,18 +71,14 @@ impl LogBuffer {
     }
 }
 
-struct Logger {
-    shared: Arc<LoggerShared>,
-}
+struct Logger {}
 
-lazy_static! {
-    static ref LOGGER_SHARED: Arc<LoggerShared> = Arc::new(LoggerShared {
-        enable_stderr: Atomic::new(true),
-        log_buffer: Mutex::new(LogBuffer {
-            buffer: Default::default(),
-        }),
-    });
-}
+static LOGGER_SHARED: LoggerShared = LoggerShared {
+    enable_stderr: Atomic::new(true),
+    log_buffer: Mutex::new(LogBuffer {
+        buffer: VecDeque::new(),
+    }),
+};
 
 impl log::Log for Logger {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
@@ -103,10 +93,10 @@ impl log::Log for Logger {
                 message: record.args().to_string(),
             };
             let string = my_record.to_string();
-            if self.shared.enable_stderr.load(Ordering::SeqCst) {
+            if LOGGER_SHARED.enable_stderr.load(Ordering::SeqCst) {
                 eprintln!("{}", string);
             }
-            let mut log_buffer = self.shared.log_buffer.lock().unwrap();
+            let mut log_buffer = LOGGER_SHARED.log_buffer.lock().unwrap();
             log_buffer.push(my_record);
         }
     }

@@ -16,7 +16,6 @@ ratatui = "0.29.0"
 crossterm = "0.29.0"
 atomic = "0.6.0"
 log = { version = "0.4.16", features = ["std"] }
-lazy_static = "1.4.0"
 walkdir = "2.5.0"
 num-traits = "0.2.19"
 seqlock = "0.2.0"
