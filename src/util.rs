@@ -4,7 +4,7 @@ use tui::{
     text::{Span, Spans, Text},
 };
 
-// Copyright 2022 Kunshan Wang
+// Copyright 2022, 2024, 2025 Kunshan Wang
 //
 // This file is part of TUIModPlayer.  TUIModPlayer is free software: you can redistribute it
 // and/or modify it under the terms of the GNU General Public License as published by the Free
