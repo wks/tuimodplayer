@@ -14,11 +14,11 @@
 mod control;
 mod display;
 
-use std::{io::stdout, panic::PanicHookInfo, sync::OnceLock, time::Duration};
+use std::time::Duration;
 
 use crate::app::AppState;
 
-use crossterm::{event, execute, terminal};
+use crossterm::event;
 
 use anyhow::Result;
 
@@ -27,45 +27,9 @@ use self::{
     display::render_ui,
 };
 
-type BoxedHook = Box<dyn Fn(&PanicHookInfo) + Sync + Send>;
-
-struct PanicHookRegistration {
-    old_hook: BoxedHook,
-}
-
-static PANIC_HOOK_REGISTRATION: OnceLock<PanicHookRegistration> = OnceLock::new();
-
-fn ui_panic_hook(panic_info: &PanicHookInfo<'_>) {
-    execute!(stdout(), terminal::LeaveAlternateScreen).unwrap_or_else(|e| {
-        // Cannot handle error while handling panic.  Printing is the best effort.
-        eprintln!("Failed to leave alternative screen: {}", e);
-    });
-    crate::logging::set_stderr_enabled(true);
-    terminal::disable_raw_mode().unwrap_or_else(|e| {
-        // Cannot handle error while handling panic.  Printing is the best effort.
-        eprintln!("Failed to disable raw mode: {}", e);
-    });
-    let old_hook = &PANIC_HOOK_REGISTRATION
-        .get()
-        .expect("ui_panic_hook called but PANIC_HOOK_REGISTRATION is not initialized.")
-        .old_hook;
-    old_hook(panic_info);
-}
-
 pub fn run_ui(app_state: &mut AppState) -> Result<()> {
-    PANIC_HOOK_REGISTRATION.get_or_init(|| {
-        let old_hook = std::panic::take_hook();
-        std::panic::set_hook(Box::new(ui_panic_hook));
-        PanicHookRegistration { old_hook }
-    });
-
-    terminal::enable_raw_mode()?;
-
+    let mut term = ratatui::try_init()?;
     crate::logging::set_stderr_enabled(false);
-    execute!(stdout(), terminal::EnterAlternateScreen)?;
-
-    let backend = ratatui::backend::CrosstermBackend::new(stdout());
-    let mut term = ratatui::Terminal::new(backend)?;
 
     'event_loop: loop {
         let mut redraw = false;
@@ -96,10 +60,9 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
         })?;
     }
 
-    execute!(stdout(), terminal::LeaveAlternateScreen)?;
     crate::logging::set_stderr_enabled(true);
 
-    terminal::disable_raw_mode()?;
+    ratatui::try_restore()?;
 
     Ok(())
 }
