@@ -65,12 +65,7 @@ impl LayoutSplitN for Layout {
     fn split_n<const N: usize>(self, area: Rect, constraints: [Constraint; N]) -> [Rect; N] {
         let results = self.constraints(constraints).split(area);
         assert_eq!(results.len(), N);
-        let mut index = 0;
-        [(); N].map(|_| {
-            let my_index = index;
-            index += 1;
-            results[my_index]
-        })
+        results.as_ref().try_into().unwrap()
     }
 }
 
