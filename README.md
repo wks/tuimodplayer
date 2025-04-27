@@ -8,11 +8,12 @@ don't know what to do with the 100000+ mod files I have?*
 TUIModPlayer is a [module music (a.k.a. mod)][mod] player with a [text-based
 user interface (TUI)][tui-wiki] written in [Rust].
 
-As the name suggests, it uses the [tui-rs] library to build the UI.
+It uses [ratatui] for its user interface.  It used to use [tui-rs], and that's
+is why it was called *TUI* Mod Player in the first place.
 
-It uses [libopenmpt] to decode mods.  It
-can play whatever format libopenmpt supports, including but not limited to
-`.mod`, `.xm`, `.s3m`, `.it`, `.mptm` and so on.
+It uses [libopenmpt] to decode mods.  It can play whatever format libopenmpt
+supports, including but not limited to `.mod`, `.xm`, `.s3m`, `.it`, `.mptm` and
+so on.
 
 [libopenmpt]: https://lib.openmpt.org/libopenmpt/
 [ModArchive-BT]: http://tracker.modarchive.org/
@@ -22,6 +23,7 @@ can play whatever format libopenmpt supports, including but not limited to
 [TUIModPlayer]: https://github.com/wks/tuimodplayer
 [tui-rs]: https://crates.io/crates/tui
 [tui-wiki]: https://en.wikipedia.org/wiki/Text-based_user_interface
+[ratatui]: https://ratatui.rs/
 
 # How to Use?
 
@@ -59,7 +61,8 @@ openmpt123 --help-keyboard
 Yes.  This is intentional.  I don't want to surprise those who are used to
 openmpt123.  But there are more:
 
--   `r`: Toggle repeating.  When on, it will repeat the same mod.
+-   `r`: Toggle repeating.  When on, it will play the same mod repeatedly
+    forever.
 -   `ctrl+L`: Redraw screen.
 
 # Author
