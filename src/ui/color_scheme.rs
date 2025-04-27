@@ -29,11 +29,11 @@ pub struct ColorScheme {
 
 impl Default for ColorScheme {
     fn default() -> Self {
-        let base = Style::default().fg(Color::White).bg(Color::Black);
+        let base = Style::default().fg(Color::Gray).bg(Color::Black);
         let log_base = base.add_modifier(Modifier::BOLD);
         Self {
             normal: base,
-            key: base.add_modifier(Modifier::BOLD),
+            key: base.fg(Color::White).add_modifier(Modifier::BOLD),
             block_title: base.add_modifier(Modifier::BOLD),
             list_highlight: Style::default()
                 .fg(Color::Black)
@@ -44,7 +44,7 @@ impl Default for ColorScheme {
             log_info: log_base.fg(Color::Green),
             log_debug: log_base.fg(Color::Blue),
             log_trace: log_base.fg(Color::Yellow),
-            log_target: log_base.fg(Color::Gray),
+            log_target: log_base.fg(Color::DarkGray),
             log_message: base,
         }
     }
