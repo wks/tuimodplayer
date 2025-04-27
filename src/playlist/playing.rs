@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 use crate::{
     backend::ModuleProvider,
     module_file::open_module_from_mod_path,
-    util::{add_modulo_unsigned, sub_modulo_unsigned, IsSomeAnd},
+    util::{add_modulo_unsigned, sub_modulo_unsigned},
 };
 
 use super::PlayListItem;
@@ -203,7 +203,8 @@ impl PlayList {
                     if case_insensitive_contains(&item.mod_path.display_name())
                         || item
                             .metadata
-                            .is_some_and2(|metadata| case_insensitive_contains(&metadata.title))
+                            .as_ref()
+                            .is_some_and(|metadata| case_insensitive_contains(&metadata.title))
                     {
                         Some(i)
                     } else {

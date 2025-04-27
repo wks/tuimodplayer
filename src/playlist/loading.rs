@@ -26,7 +26,6 @@ use zip::read::ZipFile;
 use walkdir::WalkDir;
 
 use crate::playlist::PlayListItem;
-use crate::util::IsSomeAnd;
 
 use super::{ModPath, PlayList};
 
@@ -57,15 +56,15 @@ fn get_stem_path(path: &Path) -> Option<&Path> {
 }
 
 pub fn extension_is_supported(path: &Path) -> bool {
-    path.extension().is_some_and2(|e| is_supported_mod(e))
+    path.extension().is_some_and(is_supported_mod)
 }
 
 pub fn extension2_is_supported(path: &Path) -> bool {
-    get_stem_path(path).is_some_and2(|stem_path| extension_is_supported(stem_path))
+    get_stem_path(path).is_some_and(extension_is_supported)
 }
 
 pub fn extension_is_archive(path: &Path) -> bool {
-    path.extension().is_some_and2(|e| is_supported_archive(e))
+    path.extension().is_some_and(is_supported_archive)
 }
 
 pub fn load_from_path(playlist: &mut PlayList, root_path: &str, deep_archive_search: bool) {

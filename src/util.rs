@@ -163,19 +163,3 @@ pub fn force_wrap_line<'b>(in_line: &Line<'_>, width: usize) -> Vec<Line<'b>> {
     }
     out_lines
 }
-
-/// I just want to use the unstable feature now.
-pub trait IsSomeAnd {
-    type T;
-    fn is_some_and2(&self, f: impl FnOnce(&Self::T) -> bool) -> bool;
-}
-
-impl<T> IsSomeAnd for Option<T> {
-    type T = T;
-    fn is_some_and2(&self, f: impl FnOnce(&T) -> bool) -> bool {
-        match self {
-            None => false,
-            Some(x) => f(x),
-        }
-    }
-}
