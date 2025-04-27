@@ -29,44 +29,23 @@ pub struct ColorScheme {
 
 impl Default for ColorScheme {
     fn default() -> Self {
+        let base = Style::default().fg(Color::White).bg(Color::Black);
+        let log_base = base.add_modifier(Modifier::BOLD);
         Self {
-            normal: Style::default().fg(Color::White).bg(Color::Black),
-            key: Style::default()
-                .fg(Color::White)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            block_title: Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
+            normal: base,
+            key: base.add_modifier(Modifier::BOLD),
+            block_title: base.add_modifier(Modifier::BOLD),
             list_highlight: Style::default()
                 .fg(Color::Black)
                 .bg(Color::LightGreen)
                 .add_modifier(Modifier::BOLD),
-            log_error: Style::default()
-                .fg(Color::Red)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_warn: Style::default()
-                .fg(Color::Magenta)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_info: Style::default()
-                .fg(Color::Green)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_debug: Style::default()
-                .fg(Color::Blue)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_trace: Style::default()
-                .fg(Color::Yellow)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_target: Style::default()
-                .fg(Color::Gray)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_message: Style::default().fg(Color::White).bg(Color::Black),
+            log_error: log_base.fg(Color::Red),
+            log_warn: log_base.fg(Color::Magenta),
+            log_info: log_base.fg(Color::Green),
+            log_debug: log_base.fg(Color::Blue),
+            log_trace: log_base.fg(Color::Yellow),
+            log_target: log_base.fg(Color::Gray),
+            log_message: base,
         }
     }
 }
