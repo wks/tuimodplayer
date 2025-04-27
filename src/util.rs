@@ -1,9 +1,3 @@
-use num_traits::{PrimInt, Unsigned, Zero};
-use ratatui::{
-    layout::{Constraint, Layout, Rect},
-    text::{Line, Span, Text},
-};
-
 // Copyright 2022, 2024, 2025 Kunshan Wang
 //
 // This file is part of TUIModPlayer.  TUIModPlayer is free software: you can redistribute it
@@ -16,6 +10,12 @@ use ratatui::{
 //
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
+
+use num_traits::{PrimInt, Unsigned, Zero};
+use ratatui::{
+    layout::{Constraint, Layout, Rect},
+    text::{Line, Span, Text},
+};
 
 use std::{borrow::Cow, fmt::Debug};
 
