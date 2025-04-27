@@ -20,15 +20,15 @@ use crate::{
     backend::DecodeStatus,
     logging::LogRecord,
     player::{ModuleInfo, MomentState},
-    util::{center_region, LayoutSplitN},
+    util::{LayoutSplitN, center_region},
 };
 
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,
     text::{Line, Span, Text},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
-    Frame,
 };
 
 pub fn render_ui<'a, 'f, 't>(frame: &'f mut Frame<'t>, app_state: &'a AppState)
@@ -406,8 +406,9 @@ where
 
             let indent_span = self.new_span_normal(" ".repeat(6));
 
-            let message_line =
-                Line::from(vec![self.new_span(message, self.color_scheme().log_message)]);
+            let message_line = Line::from(vec![
+                self.new_span(message, self.color_scheme().log_message),
+            ]);
             let mut wrapped = crate::util::force_wrap_line(&message_line, message_width);
             wrapped.iter_mut().for_each(|l| {
                 l.spans.insert(0, indent_span.clone());

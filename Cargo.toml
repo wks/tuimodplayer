@@ -15,7 +15,7 @@
 name = "tuimodplayer"
 version = "0.1.0"
 authors = ["Kunshan Wang <wks1986@gmail.com>"]
-edition = "2021"
+edition = "2024"
 description = "A text-user-interface module music player using libopenmpt"
 license = "GPL-3.0"
 

@@ -16,7 +16,7 @@ use std::{
     io::{Cursor, Read, Seek},
 };
 
-use openmpt::module::{stream::ModuleStream, Logger, Module};
+use openmpt::module::{Logger, Module, stream::ModuleStream};
 
 use anyhow::{Context, Result};
 use zip::ZipArchive;

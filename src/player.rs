@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use openmpt::module::{metadata::MetadataKey, Module};
+use openmpt::module::{Module, metadata::MetadataKey};
 use seqlock::SeqLock;
 
 use crate::util::screen_width;

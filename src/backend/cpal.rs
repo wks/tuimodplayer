@@ -12,13 +12,13 @@
 // not, see <https://www.gnu.org/licenses/>.
 
 use std::{
-    sync::{self, mpsc, Arc, Condvar, Mutex},
+    sync::{self, Arc, Condvar, Mutex, mpsc},
     time::{Duration, Instant},
 };
 
 use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, Host, Stream,
+    traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use openmpt::module::Module;
 use seqlock::SeqLock;

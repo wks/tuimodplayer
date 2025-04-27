@@ -24,7 +24,7 @@ use crossterm::event;
 use anyhow::Result;
 
 use self::{
-    control::{handle_key_event, HandleKeyResult},
+    control::{HandleKeyResult, handle_key_event},
     display::render_ui,
 };
 
