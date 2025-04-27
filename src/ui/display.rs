@@ -13,6 +13,8 @@
 
 use std::borrow::Cow;
 
+use super::color_scheme::ColorScheme;
+
 use crate::{
     app::{AppState, UiMode},
     backend::DecodeStatus,
@@ -23,76 +25,18 @@ use crate::{
 
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::Style,
     text::{Line, Span, Text},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
 
-pub fn render_ui<'a, 'f, 't>(frame: &'f mut Frame<'t>, area: Rect, app_state: &'a AppState)
+pub fn render_ui<'a, 'f, 't>(frame: &'f mut Frame<'t>, app_state: &'a AppState)
 where
     't: 'f,
 {
-    let mut ui_renderer = UIRenderer::new(app_state, frame, ColorScheme::default());
-    ui_renderer.render_ui(area);
-}
-
-struct ColorScheme {
-    normal: Style,
-    key: Style,
-    block_title: Style,
-    list_highlight: Style,
-    log_error: Style,
-    log_warn: Style,
-    log_info: Style,
-    log_debug: Style,
-    log_trace: Style,
-    log_target: Style,
-    log_message: Style,
-}
-
-impl Default for ColorScheme {
-    fn default() -> Self {
-        Self {
-            normal: Style::default().fg(Color::White).bg(Color::Black),
-            key: Style::default()
-                .fg(Color::White)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            block_title: Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-            list_highlight: Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightGreen)
-                .add_modifier(Modifier::BOLD),
-            log_error: Style::default()
-                .fg(Color::Red)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_warn: Style::default()
-                .fg(Color::Magenta)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_info: Style::default()
-                .fg(Color::Green)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_debug: Style::default()
-                .fg(Color::Blue)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_trace: Style::default()
-                .fg(Color::Yellow)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_target: Style::default()
-                .fg(Color::Gray)
-                .bg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-            log_message: Style::default().fg(Color::White).bg(Color::Black),
-        }
-    }
+    let mut ui_renderer = UIRenderer::new(app_state, frame);
+    ui_renderer.render_ui();
 }
 
 trait ThemedUIBuilder {
@@ -200,12 +144,11 @@ where
 {
     app_state: &'a AppState,
     frame: &'f mut Frame<'t>,
-    color_scheme: ColorScheme,
 }
 
 impl ThemedUIBuilder for UIRenderer<'_, '_, '_> {
     fn color_scheme(&self) -> &ColorScheme {
-        &self.color_scheme
+        &self.app_state.color_scheme
     }
 }
 
@@ -213,21 +156,13 @@ impl<'a, 'f, 't> UIRenderer<'a, 'f, 't>
 where
     't: 'f,
 {
-    pub fn new(
-        app_state: &'a AppState,
-        frame: &'f mut Frame<'t>,
-        color_scheme: ColorScheme,
-    ) -> Self {
-        Self {
-            app_state,
-            frame,
-            color_scheme,
-        }
+    pub fn new(app_state: &'a AppState, frame: &'f mut Frame<'t>) -> Self {
+        Self { app_state, frame }
     }
 
     const MAX_MOD_SAMPLE_NAME_LEN: usize = 22;
 
-    pub fn render_ui(&mut self, area: Rect) {
+    pub fn render_ui(&mut self) {
         let maybe_message_width = self
             .app_state
             .play_state
@@ -241,7 +176,7 @@ where
             + 2;
 
         let [left, message] = Layout::default().direction(Direction::Horizontal).split_n(
-            area,
+            self.frame.area(),
             [
                 Constraint::Min(10),
                 Constraint::Length(message_window_width as u16),
@@ -376,7 +311,7 @@ where
 
     fn render_playlist(&mut self, area: Rect) {
         let app_state = self.app_state;
-        let color_scheme = &self.color_scheme;
+        let color_scheme = &self.color_scheme();
 
         let window_height = area.height as usize - 2;
 

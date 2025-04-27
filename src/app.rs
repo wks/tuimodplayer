@@ -20,6 +20,7 @@ use crate::player::PlayState;
 use crate::playlist::{PlayList, PlayListModuleProvider};
 
 use crate::backend::{Backend, BackendEvent, CpalBackend};
+use crate::ui::color_scheme::ColorScheme;
 use crate::ui::run_ui;
 
 use anyhow::Result;
@@ -38,6 +39,7 @@ pub struct AppState {
     pub playlist: Arc<Mutex<PlayList>>,
     pub control: ModuleControl,
     pub ui_mode: UiMode,
+    pub color_scheme: ColorScheme,
 }
 
 impl AppState {
@@ -184,6 +186,7 @@ pub fn run(options: Options) -> Result<()> {
         playlist,
         control,
         ui_mode: Default::default(),
+        color_scheme: Default::default(),
     };
 
     app_state.start_playing();

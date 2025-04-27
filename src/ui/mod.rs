@@ -11,6 +11,7 @@
 // You should have received a copy of the GNU General Public License along with TUIModPlayer. If
 // not, see <https://www.gnu.org/licenses/>.
 
+pub mod color_scheme;
 mod control;
 mod display;
 
@@ -55,8 +56,7 @@ pub fn run_ui(app_state: &mut AppState) -> Result<()> {
         }
 
         term.draw(|frame| {
-            let area = frame.area();
-            render_ui(frame, area, app_state);
+            render_ui(frame, app_state);
         })?;
     }
 
